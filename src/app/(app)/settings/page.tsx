@@ -179,12 +179,29 @@ function ContactModal({ onClose }: { onClose: () => void }) {
   const [category, setCategory] = useState('機能の使い方')
   const [message, setMessage] = useState('')
   const [sent, setSent] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const categories = ['機能の使い方', 'バグ・不具合', '要望・提案', 'アカウント', 'その他']
 
-  const handleSend = () => {
+  const [sendError, setSendError] = useState('')
+
+  const handleSend = async () => {
     if (!message.trim()) return
-    setSent(true)
+    setLoading(true)
+    setSendError('')
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, message }),
+      })
+      if (!res.ok) throw new Error()
+      setSent(true)
+    } catch {
+      setSendError('送信に失敗しました。しばらくしてから再度お試しください。')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -237,13 +254,18 @@ function ContactModal({ onClose }: { onClose: () => void }) {
             ご返信はご登録のメールアドレスへお送りします。通常3〜5営業日以内にご連絡します。
           </p>
 
+          {sendError && <p className="text-xs text-red-500 text-center">{sendError}</p>}
+
           <button
             onClick={handleSend}
-            disabled={!message.trim()}
+            disabled={!message.trim() || loading}
             className="w-full py-3.5 bg-orange-500 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Send className="w-4 h-4" />
-            送信する
+            {loading
+              ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+              : <Send className="w-4 h-4" />
+            }
+            {loading ? '送信中...' : '送信する'}
           </button>
         </div>
       )}

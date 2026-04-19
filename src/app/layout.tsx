@@ -12,6 +12,11 @@ const notoSansJP = Noto_Sans_JP({
 export const metadata: Metadata = {
   title: 'のびメシ - 子供の食事管理',
   description: '子供の成長に特化した食事・栄養管理アプリ',
+  icons: {
+    icon: '/icon.png',
+    apple: '/icon.png',
+    shortcut: '/icon.png',
+  },
 }
 
 export const viewport: Viewport = {
