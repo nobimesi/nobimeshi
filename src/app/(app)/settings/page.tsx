@@ -4,10 +4,11 @@ import { useState } from 'react'
 import {
   User, Plus, ChevronRight, MessageCircle,
   FileText, Shield, LogOut, Trash2, Edit3, X, Bell, HelpCircle,
-  Sun, Moon, Monitor,
+  Sun, Moon, Monitor, Send, AlertTriangle, Check,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useTheme, type Theme } from '@/components/ThemeProvider'
+import Link from 'next/link'
 
 interface Child {
   id: number
@@ -56,7 +57,6 @@ function ChildForm({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 絵文字選択 */}
       <div>
         <p className="text-xs font-medium text-gray-500 mb-2">アイコン</p>
         <div className="flex gap-2">
@@ -169,31 +169,281 @@ function ChildForm({
 }
 
 const THEME_OPTIONS: { value: Theme; label: string; desc: string; Icon: React.ComponentType<{ className?: string }> }[] = [
-  { value: 'light',  label: 'ライト',         desc: '常に明るいテーマ',       Icon: Sun },
-  { value: 'dark',   label: 'ダーク',         desc: '常に暗いテーマ',         Icon: Moon },
-  { value: 'system', label: 'システム設定',   desc: 'OSの設定に合わせる',     Icon: Monitor },
+  { value: 'light',  label: 'ライト',       desc: '常に明るいテーマ',   Icon: Sun },
+  { value: 'dark',   label: 'ダーク',       desc: '常に暗いテーマ',     Icon: Moon },
+  { value: 'system', label: 'システム設定', desc: 'OSの設定に合わせる', Icon: Monitor },
 ]
 
+// ---- お問い合わせモーダル ----
+function ContactModal({ onClose }: { onClose: () => void }) {
+  const [category, setCategory] = useState('機能の使い方')
+  const [message, setMessage] = useState('')
+  const [sent, setSent] = useState(false)
+
+  const categories = ['機能の使い方', 'バグ・不具合', '要望・提案', 'アカウント', 'その他']
+
+  const handleSend = () => {
+    if (!message.trim()) return
+    setSent(true)
+  }
+
+  return (
+    <BottomSheet title="お問い合わせ" onClose={onClose}>
+      {sent ? (
+        <div className="flex flex-col items-center gap-4 py-8">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+            <Check className="w-8 h-8 text-green-500" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-gray-800 mb-1">送信しました</p>
+            <p className="text-sm text-gray-500">内容を確認の上、3〜5営業日以内にご登録のメールアドレスへご連絡します。</p>
+          </div>
+          <button onClick={onClose} className="mt-2 px-8 py-3 bg-orange-500 text-white rounded-xl text-sm font-semibold">
+            閉じる
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-2 block">カテゴリ</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(c => (
+                <button
+                  key={c}
+                  onClick={() => setCategory(c)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    category === c ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-500 border-gray-200'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">お問い合わせ内容</label>
+            <textarea
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder="お困りの内容をできるだけ詳しくご記入ください..."
+              rows={5}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
+            />
+            <p className="text-right text-xs text-gray-400 mt-1">{message.length} 文字</p>
+          </div>
+
+          <p className="text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-3">
+            ご返信はご登録のメールアドレスへお送りします。通常3〜5営業日以内にご連絡します。
+          </p>
+
+          <button
+            onClick={handleSend}
+            disabled={!message.trim()}
+            className="w-full py-3.5 bg-orange-500 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Send className="w-4 h-4" />
+            送信する
+          </button>
+        </div>
+      )}
+    </BottomSheet>
+  )
+}
+
+// ---- 通知設定モーダル ----
+function NotificationModal({ onClose }: { onClose: () => void }) {
+  const [settings, setSettings] = useState({
+    mealReminder: true,
+    morningReminder: false,
+    lunchReminder: true,
+    dinnerReminder: true,
+    weeklyReport: true,
+    growthRecord: false,
+    tips: true,
+  })
+
+  const toggle = (key: keyof typeof settings) => {
+    setSettings(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const items = [
+    { key: 'mealReminder' as const, label: '食事記録のリマインダー', desc: '毎食のタイミングに通知' },
+    { key: 'morningReminder' as const, label: '朝食リマインダー', desc: '毎日 7:00', indent: true },
+    { key: 'lunchReminder' as const, label: '昼食リマインダー', desc: '毎日 12:00', indent: true },
+    { key: 'dinnerReminder' as const, label: '夕食リマインダー', desc: '毎日 18:00', indent: true },
+    { key: 'weeklyReport' as const, label: '週間レポート', desc: '毎週月曜日に先週の栄養サマリーを通知' },
+    { key: 'growthRecord' as const, label: '成長記録のリマインダー', desc: '毎月1日に身長・体重の記録を促す' },
+    { key: 'tips' as const, label: 'お役立ちTips', desc: '栄養・食育に関する情報をお届け' },
+  ]
+
+  return (
+    <BottomSheet title="通知設定" onClose={onClose}>
+      <div className="flex flex-col gap-1">
+        {items.map(item => (
+          <div
+            key={item.key}
+            className={`flex items-center justify-between py-3.5 border-b border-gray-50 last:border-0 ${item.indent ? 'pl-4' : ''}`}
+          >
+            <div>
+              <p className="text-sm font-medium text-gray-800">{item.label}</p>
+              <p className="text-xs text-gray-400">{item.desc}</p>
+            </div>
+            <button
+              onClick={() => toggle(item.key)}
+              className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ml-4 ${
+                settings[item.key] ? 'bg-orange-500' : 'bg-gray-200'
+              }`}
+            >
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                settings[item.key] ? 'translate-x-6' : 'translate-x-0.5'
+              }`} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={onClose}
+        className="mt-4 w-full py-3.5 bg-orange-500 text-white rounded-xl text-sm font-semibold"
+      >
+        保存する
+      </button>
+    </BottomSheet>
+  )
+}
+
+// ---- アカウント削除モーダル ----
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState<'confirm' | 'input'>('confirm')
+  const [inputText, setInputText] = useState('')
+  const CONFIRM_WORD = '削除する'
+
+  const handleDelete = () => {
+    if (inputText !== CONFIRM_WORD) return
+    signOut({ callbackUrl: '/login' })
+  }
+
+  return (
+    <BottomSheet title="アカウントを削除" onClose={onClose}>
+      {step === 'confirm' ? (
+        <div className="flex flex-col gap-4">
+          <div className="bg-red-50 rounded-2xl p-4 flex gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-semibold text-red-700">削除すると元に戻せません</p>
+              <p className="text-xs text-red-500 leading-relaxed">
+                アカウントを削除すると、以下のすべてのデータが完全に削除されます。
+              </p>
+            </div>
+          </div>
+
+          <ul className="flex flex-col gap-2 px-1">
+            {[
+              '登録されたすべての子供のプロフィール',
+              'これまでの食事記録・写真',
+              '成長記録（身長・体重）',
+              'アレルギー・苦手食品の情報',
+              'アカウント情報・設定',
+            ].map((item, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm text-gray-600">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                {item}
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={() => setStep('input')}
+              className="flex-1 py-3 bg-red-500 text-white rounded-xl text-sm font-semibold"
+            >
+              削除に進む
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-gray-600 leading-relaxed">
+            削除を確認するため、下のテキストボックスに
+            <span className="font-bold text-red-500">「{CONFIRM_WORD}」</span>
+            と入力してください。
+          </p>
+          <input
+            type="text"
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            placeholder={CONFIRM_WORD}
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-300"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setStep('confirm'); setInputText('') }}
+              className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium"
+            >
+              戻る
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={inputText !== CONFIRM_WORD}
+              className="flex-1 py-3 bg-red-500 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              完全に削除する
+            </button>
+          </div>
+        </div>
+      )}
+    </BottomSheet>
+  )
+}
+
+// ---- 共通ボトムシート ----
+function BottomSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-lg mx-auto max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose} className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </>
+  )
+}
+
+// ---- メインページ ----
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const [children, setChildren] = useState<Child[]>(INITIAL_CHILDREN)
   const [showAddChild, setShowAddChild] = useState(false)
   const [editChild, setEditChild] = useState<Child | null>(null)
+  const [showContact, setShowContact] = useState(false)
+  const [showNotification, setShowNotification] = useState(false)
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false)
 
   const menuGroups = [
     {
       title: 'サポート',
       items: [
-        { icon: MessageCircle, label: 'お問い合わせ', color: 'text-blue-500', bg: 'bg-blue-50' },
-        { icon: HelpCircle, label: 'よくある質問', color: 'text-purple-500', bg: 'bg-purple-50' },
-        { icon: Bell, label: '通知設定', color: 'text-orange-500', bg: 'bg-orange-50' },
+        { icon: MessageCircle, label: 'お問い合わせ', color: 'text-blue-500', bg: 'bg-blue-50', onClick: () => setShowContact(true) },
+        { icon: HelpCircle, label: 'よくある質問', color: 'text-purple-500', bg: 'bg-purple-50', href: '/settings/faq' },
+        { icon: Bell, label: '通知設定', color: 'text-orange-500', bg: 'bg-orange-50', onClick: () => setShowNotification(true) },
       ]
     },
     {
       title: '法的情報',
       items: [
-        { icon: FileText, label: '利用規約', color: 'text-gray-500', bg: 'bg-gray-50' },
-        { icon: Shield, label: 'プライバシーポリシー', color: 'text-gray-500', bg: 'bg-gray-50' },
+        { icon: FileText, label: '利用規約', color: 'text-gray-500', bg: 'bg-gray-50', href: '/settings/terms' },
+        { icon: Shield, label: 'プライバシーポリシー', color: 'text-gray-500', bg: 'bg-gray-50', href: '/settings/privacy' },
       ]
     },
   ]
@@ -275,7 +525,7 @@ export default function SettingsPage() {
       <div className="px-4 py-2">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">テーマ</p>
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-          {THEME_OPTIONS.map((opt, i) => {
+          {THEME_OPTIONS.map((opt) => {
             const { Icon } = opt
             const isSelected = theme === opt.value
             return (
@@ -317,11 +567,8 @@ export default function SettingsPage() {
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             {group.items.map((item, i) => {
               const Icon = item.icon
-              return (
-                <button
-                  key={i}
-                  className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0"
-                >
+              const inner = (
+                <div className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 w-full">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 ${item.bg} rounded-xl flex items-center justify-center`}>
                       <Icon className={`w-4 h-4 ${item.color}`} />
@@ -329,6 +576,14 @@ export default function SettingsPage() {
                     <span className="text-sm text-gray-700">{item.label}</span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              )
+              if ('href' in item && item.href) {
+                return <Link key={i} href={item.href}>{inner}</Link>
+              }
+              return (
+                <button key={i} onClick={item.onClick} className="w-full text-left">
+                  {inner}
                 </button>
               )
             })}
@@ -349,7 +604,10 @@ export default function SettingsPage() {
             </div>
             <span className="text-sm text-gray-700">サインアウト</span>
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition-colors">
+          <button
+            onClick={() => setShowDeleteAccount(true)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-red-50 transition-colors"
+          >
             <div className="w-8 h-8 bg-red-50 rounded-xl flex items-center justify-center">
               <Trash2 className="w-4 h-4 text-red-400" />
             </div>
@@ -360,7 +618,7 @@ export default function SettingsPage() {
 
       <p className="text-center text-xs text-gray-300 pb-6">のびメシ v1.0.0</p>
 
-      {/* モーダル */}
+      {/* 子供追加・編集モーダル */}
       {(showAddChild || editChild) && (
         <>
           <div className="fixed inset-0 bg-black/40 z-40" onClick={() => { setShowAddChild(false); setEditChild(null) }} />
@@ -391,6 +649,11 @@ export default function SettingsPage() {
           </div>
         </>
       )}
+
+      {/* 各種モーダル */}
+      {showContact && <ContactModal onClose={() => setShowContact(false)} />}
+      {showNotification && <NotificationModal onClose={() => setShowNotification(false)} />}
+      {showDeleteAccount && <DeleteAccountModal onClose={() => setShowDeleteAccount(false)} />}
     </div>
   )
 }
