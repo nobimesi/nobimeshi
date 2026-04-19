@@ -40,7 +40,7 @@ export default function LoginPage() {
         <div className="w-20 h-20 bg-orange-500 rounded-3xl flex items-center justify-center mb-4 shadow-lg shadow-orange-200">
           <span className="text-4xl">🥗</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-800">キッズミール</h1>
+        <h1 className="text-2xl font-bold text-gray-800">のびメシ</h1>
         <p className="text-sm text-gray-400 mt-1">子供の成長を食事からサポート</p>
       </div>
 

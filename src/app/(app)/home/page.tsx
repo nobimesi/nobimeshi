@@ -214,7 +214,7 @@ export default function HomePage() {
       <div className="bg-white px-4 pt-12 pb-3 border-b border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-lg font-bold text-gray-800">キッズミール</h1>
+            <h1 className="text-lg font-bold text-gray-800">のびメシ</h1>
             <p className="text-xs text-gray-400">子供の食事・栄養管理</p>
           </div>
         </div>

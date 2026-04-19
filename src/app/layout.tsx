@@ -10,7 +10,7 @@ const notoSansJP = Noto_Sans_JP({
 })
 
 export const metadata: Metadata = {
-  title: 'キッズミール - 子供の食事管理',
+  title: 'のびメシ - 子供の食事管理',
   description: '子供の成長に特化した食事・栄養管理アプリ',
 }
 

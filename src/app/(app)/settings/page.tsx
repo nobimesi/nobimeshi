@@ -354,7 +354,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <p className="text-center text-xs text-gray-300 pb-6">キッズミール v1.0.0</p>
+      <p className="text-center text-xs text-gray-300 pb-6">のびメシ v1.0.0</p>
 
       {/* モーダル */}
       {(showAddChild || editChild) && (
