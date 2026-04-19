@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Eye, EyeOff, ArrowLeft, Check } from 'lucide-react'
+
+type Mode = 'login' | 'signup' | 'reset'
 
 export default function LoginPage() {
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resetSent, setResetSent] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,20 +32,100 @@ export default function LoginPage() {
     }
   }
 
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email.trim()) return
+    setLoading(true)
+    // TODO: パスワードリセットメール送信API呼び出し
+    await new Promise(r => setTimeout(r, 800))
+    setLoading(false)
+    setResetSent(true)
+  }
+
   const handleGoogle = () => {
     signIn('google', { callbackUrl: '/home' })
   }
 
+  const Logo = () => (
+    <div className="flex flex-col items-center mb-10">
+      <div className="w-20 h-20 bg-orange-500 rounded-3xl flex items-center justify-center mb-4 shadow-lg shadow-orange-200">
+        <span className="text-4xl">🥗</span>
+      </div>
+      <h1 className="text-2xl font-bold text-gray-800">のびメシ</h1>
+      <p className="text-sm text-gray-400 mt-1">子供の成長を食事からサポート</p>
+    </div>
+  )
+
+  // パスワードリセット画面
+  if (mode === 'reset') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
+        <div className="w-full max-w-sm">
+          <button
+            onClick={() => { setMode('login'); setResetSent(false); setError('') }}
+            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 mb-8"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            ログインに戻る
+          </button>
+
+          {resetSent ? (
+            <div className="flex flex-col items-center gap-4 text-center py-6">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <Check className="w-8 h-8 text-green-500" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 mb-2">メールを送信しました</p>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  <span className="font-medium text-gray-700">{email}</span> にパスワードリセット用のリンクを送信しました。
+                  メールをご確認ください。
+                </p>
+              </div>
+              <p className="text-xs text-gray-400">メールが届かない場合は迷惑メールフォルダをご確認ください</p>
+              <button
+                onClick={() => { setMode('login'); setResetSent(false) }}
+                className="mt-2 px-8 py-3 bg-orange-500 text-white rounded-xl text-sm font-semibold"
+              >
+                ログイン画面へ
+              </button>
+            </div>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">パスワードをリセット</h2>
+              <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+                登録済みのメールアドレスを入力してください。パスワードリセット用のリンクをお送りします。
+              </p>
+
+              <form onSubmit={handleReset} className="flex flex-col gap-3">
+                <input
+                  type="email"
+                  placeholder="メールアドレス"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                />
+                {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={loading || !email.trim()}
+                  className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-orange-200 disabled:opacity-60 mt-1"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  リセットメールを送信
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ログイン・新規登録画面
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
-      {/* ロゴ */}
-      <div className="flex flex-col items-center mb-10">
-        <div className="w-20 h-20 bg-orange-500 rounded-3xl flex items-center justify-center mb-4 shadow-lg shadow-orange-200">
-          <span className="text-4xl">🥗</span>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-800">のびメシ</h1>
-        <p className="text-sm text-gray-400 mt-1">子供の成長を食事からサポート</p>
-      </div>
+      <Logo />
 
       <div className="w-full max-w-sm">
         {/* Googleログイン */}
@@ -93,6 +176,18 @@ export default function LoginPage() {
             </button>
           </div>
 
+          {mode === 'login' && (
+            <div className="text-right -mt-1">
+              <button
+                type="button"
+                onClick={() => { setMode('reset'); setError('') }}
+                className="text-xs text-orange-500 hover:text-orange-600"
+              >
+                パスワードをお忘れの方はこちら
+              </button>
+            </div>
+          )}
+
           {error && <p className="text-xs text-red-500 text-center">{error}</p>}
 
           <button
@@ -101,15 +196,15 @@ export default function LoginPage() {
             className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60 mt-1"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {isSignUp ? '新規登録' : 'ログイン'}
+            {mode === 'signup' ? '新規登録' : 'ログイン'}
           </button>
         </form>
 
         <button
-          onClick={() => setIsSignUp(!isSignUp)}
+          onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}
           className="w-full text-center text-sm text-gray-400 mt-4 hover:text-gray-600"
         >
-          {isSignUp ? 'すでにアカウントをお持ちの方はこちら' : 'アカウントをお持ちでない方はこちら'}
+          {mode === 'signup' ? 'すでにアカウントをお持ちの方はこちら' : 'アカウントをお持ちでない方はこちら'}
         </button>
       </div>
     </div>
