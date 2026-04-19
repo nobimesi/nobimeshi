@@ -6,6 +6,7 @@ import {
   FileText, Shield, LogOut, Trash2, Edit3, X, Bell, HelpCircle,
   Sun, Moon, Monitor,
 } from 'lucide-react'
+import { signOut } from 'next-auth/react'
 import { useTheme, type Theme } from '@/components/ThemeProvider'
 
 interface Child {
@@ -339,7 +340,10 @@ export default function SettingsPage() {
       <div className="px-4 py-2 pb-6">
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2.5 px-1">アカウント</p>
         <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-          <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-gray-50">
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors border-b border-gray-50"
+          >
             <div className="w-8 h-8 bg-gray-100 rounded-xl flex items-center justify-center">
               <LogOut className="w-4 h-4 text-gray-500" />
             </div>
