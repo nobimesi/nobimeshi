@@ -1,26 +1,119 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* ===== ライトモード デフォルト ===== */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg-page:    #f3f4f6;
+  --color-bg-surface: #ffffff;
+  --color-bg-subtle:  #f9fafb;
+  --color-bg-muted:   #f3f4f6;
+  --color-border:     #f3f4f6;
+  --color-border-md:  #e5e7eb;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ===== ダークモード ===== */
+.dark {
+  color-scheme: dark;
+  --color-bg-page:    #0f172a;
+  --color-bg-surface: #1e293b;
+  --color-bg-subtle:  #0f172a;
+  --color-bg-muted:   #1a2535;
+  --color-border:     #1e293b;
+  --color-border-md:  #334155;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ===== 基本 ===== */
+* { box-sizing: border-box; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-bg-page);
+  color: #1a1a1a;
+  -webkit-tap-highlight-color: transparent;
+}
+.dark body { color: #f1f5f9; }
+
+/* ===== ダークモード上書き ===== */
+
+/* 背景 */
+.dark .bg-white         { background-color: #1e293b !important; }
+.dark .bg-gray-50       { background-color: #0f172a !important; }
+.dark .bg-gray-100      { background-color: #1a2535 !important; }
+
+/* テキスト */
+.dark .text-gray-900    { color: #f8fafc !important; }
+.dark .text-gray-800    { color: #f1f5f9 !important; }
+.dark .text-gray-700    { color: #e2e8f0 !important; }
+.dark .text-gray-600    { color: #cbd5e1 !important; }
+.dark .text-gray-500    { color: #94a3b8 !important; }
+.dark .text-gray-400    { color: #64748b !important; }
+.dark .text-gray-300    { color: #475569 !important; }
+
+/* ボーダー */
+.dark .border-gray-50   { border-color: #1a2535 !important; }
+.dark .border-gray-100  { border-color: #334155 !important; }
+.dark .border-gray-200  { border-color: #475569 !important; }
+
+/* ホバー */
+.dark .hover\:bg-gray-50:hover  { background-color: #1a2535 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #253347 !important; }
+
+/* シャドウ */
+.dark .shadow-sm {
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.5), 0 1px 2px -1px rgba(0,0,0,0.5) !important;
+}
+.dark .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.6), 0 8px 10px -6px rgba(0,0,0,0.5) !important;
+}
+
+/* フォーム */
+.dark input:not([type="file"]):not([type="date"]),
+.dark textarea,
+.dark select {
+  background-color: #253347 !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+.dark input[type="date"] {
+  background-color: #253347 !important;
+  color: #f1f5f9 !important;
+  border-color: #475569 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder { color: #64748b !important; }
+
+/* サブ背景（グラデーションカード等） */
+.dark .bg-gradient-to-br.from-orange-50 { background: linear-gradient(to bottom right, #2d1a0e, #2d2010) !important; }
+.dark .bg-gradient-to-r.from-orange-500 { /* そのまま保持 */ }
+.dark .bg-orange-50  { background-color: #2d1a0e !important; }
+.dark .bg-amber-50   { background-color: #2d2010 !important; }
+.dark .bg-blue-50    { background-color: #0f1e2d !important; }
+.dark .bg-green-50   { background-color: #0d1f18 !important; }
+.dark .bg-red-50     { background-color: #2d0f0f !important; }
+.dark .bg-yellow-50  { background-color: #2d2508 !important; }
+.dark .bg-purple-50  { background-color: #1c0f2d !important; }
+
+/* テキスト（色系） */
+.dark .text-orange-600 { color: #fb923c !important; }
+.dark .text-orange-700 { color: #ea580c !important; }
+.dark .text-yellow-700 { color: #fbbf24 !important; }
+.dark .text-red-600    { color: #f87171 !important; }
+.dark .text-red-500    { color: #ef4444 !important; }
+.dark .text-green-700  { color: #4ade80 !important; }
+.dark .text-green-500  { color: #22c55e !important; }
+
+/* ボーダー（色系） */
+.dark .border-orange-100 { border-color: #7c2d12 !important; }
+.dark .border-orange-200 { border-color: #9a3412 !important; }
+.dark .border-red-200    { border-color: #7f1d1d !important; }
+.dark .border-green-200  { border-color: #14532d !important; }
+.dark .border-yellow-200 { border-color: #713f12 !important; }
+
+/* ===== スクロールバー非表示 ===== */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
