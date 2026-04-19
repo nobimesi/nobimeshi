@@ -17,16 +17,16 @@ export default function TermsPage() {
       </div>
 
       <div className="px-5 py-5 pb-24 flex flex-col gap-6 text-sm text-gray-700 leading-relaxed">
-        <p className="text-xs text-gray-400">最終更新日：2026年4月1日</p>
+        <p className="text-xs text-gray-400">最終更新日：2026年4月19日</p>
 
         <p>
-          本利用規約（以下「本規約」）は、のびメシ（以下「本サービス」）の利用条件を定めるものです。
+          本利用規約（以下「本規約」）は、Belle Vie（以下「運営者」）が提供するのびメシ（以下「本サービス」）の利用条件を定めるものです。
           ユーザーの皆様には、本規約に同意のうえ本サービスをご利用いただきます。
         </p>
 
         <section className="flex flex-col gap-2">
           <h2 className="font-bold text-gray-800">第1条（適用）</h2>
-          <p>本規約は、ユーザーと本サービス運営者との間の本サービスの利用に関わる一切の関係に適用されます。</p>
+          <p>本規約は、ユーザーと運営者（Belle Vie）との間の本サービスの利用に関わる一切の関係に適用されます。</p>
         </section>
 
         <section className="flex flex-col gap-2">
@@ -94,7 +94,18 @@ export default function TermsPage() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="font-bold text-gray-800">第8条（準拠法・裁判管轄）</h2>
+          <h2 className="font-bold text-gray-800">第8条（お問い合わせ）</h2>
+          <p>
+            本規約に関するお問い合わせは、下記またはアプリ内のお問い合わせフォームよりご連絡ください。
+          </p>
+          <p className="text-gray-500">
+            運営者：Belle Vie<br />
+            メール：nobimeshi.app@gmail.com
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-bold text-gray-800">第9条（準拠法・裁判管轄）</h2>
           <p>
             本規約の解釈にあたっては、日本法を準拠法とします。
             本サービスに関して紛争が生じた場合には、運営者の所在地を管轄する裁判所を専属的合意管轄とします。

@@ -17,10 +17,11 @@ export default function PrivacyPage() {
       </div>
 
       <div className="px-5 py-5 pb-24 flex flex-col gap-6 text-sm text-gray-700 leading-relaxed">
-        <p className="text-xs text-gray-400">最終更新日：2026年4月1日</p>
+        <p className="text-xs text-gray-400">最終更新日：2026年4月19日</p>
 
         <p>
-          のびメシ（以下「本サービス」）は、ユーザーの個人情報の取り扱いについて、以下のとおりプライバシーポリシーを定めます。
+          Belle Vie（以下「運営者」）は、運営するのびメシ（以下「本サービス」）におけるユーザーの個人情報の取り扱いについて、
+          個人情報の保護に関する法律（個人情報保護法）およびその他関連法令を遵守し、以下のとおりプライバシーポリシーを定めます。
         </p>
 
         <section className="flex flex-col gap-2">
@@ -53,13 +54,15 @@ export default function PrivacyPage() {
         <section className="flex flex-col gap-2">
           <h2 className="font-bold text-gray-800">第3条（第三者への提供）</h2>
           <p>
-            運営者は、以下の場合を除き、ユーザーの個人情報を第三者に提供しません。
+            運営者は、個人情報保護法その他の法令に基づく場合を除き、あらかじめユーザーの同意を得ることなく、第三者に個人情報を提供しません。
+            ただし、以下の場合はこの限りではありません。
           </p>
           <ul className="list-disc pl-5 flex flex-col gap-1 text-gray-600">
             <li>ユーザーの同意がある場合</li>
             <li>法令に基づく場合</li>
-            <li>人の生命・身体・財産の保護のために必要な場合</li>
-            <li>公衆衛生の向上または児童の健全な育成の推進のために特に必要な場合</li>
+            <li>人の生命・身体・財産の保護のために必要があり、本人の同意を得ることが困難な場合</li>
+            <li>公衆衛生の向上または児童の健全な育成の推進のために特に必要があり、本人の同意を得ることが困難な場合</li>
+            <li>国の機関もしくは地方公共団体またはその委託を受けた者が法令の定める事務を遂行することに対して協力する必要がある場合</li>
           </ul>
         </section>
 
@@ -104,14 +107,22 @@ export default function PrivacyPage() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="font-bold text-gray-800">第8条（ユーザーの権利）</h2>
-          <p>ユーザーは以下の権利を有します。</p>
+          <h2 className="font-bold text-gray-800">第8条（個人情報保護法に基づく権利）</h2>
+          <p>
+            ユーザーは、個人情報の保護に関する法律（個人情報保護法）に基づき、運営者に対して以下の請求を行う権利を有します。
+          </p>
           <ul className="list-disc pl-5 flex flex-col gap-1 text-gray-600">
-            <li>保有する個人情報の開示請求</li>
-            <li>個人情報の訂正・追加・削除の請求</li>
-            <li>個人情報の利用停止・消去の請求</li>
+            <li>保有個人データの利用目的の通知</li>
+            <li>保有個人データの開示</li>
+            <li>個人情報の内容の訂正・追加・削除</li>
+            <li>個人情報の利用停止・消去</li>
+            <li>第三者への提供の停止</li>
           </ul>
-          <p className="text-gray-500">これらの請求はお問い合わせフォームよりご連絡ください。</p>
+          <p className="text-gray-500">
+            これらの請求は、本人確認を行った上で対応します。
+            お問い合わせフォームまたは nobimeshi.app@gmail.com までご連絡ください。
+            合理的な期間内（原則2週間以内）にご回答します。
+          </p>
         </section>
 
         <section className="flex flex-col gap-2">
@@ -132,9 +143,21 @@ export default function PrivacyPage() {
         </section>
 
         <section className="flex flex-col gap-2">
-          <h2 className="font-bold text-gray-800">第11条（お問い合わせ）</h2>
+          <h2 className="font-bold text-gray-800">第11条（個人情報保護管理）</h2>
           <p>
-            本ポリシーに関するお問い合わせは、アプリ内のお問い合わせフォームよりご連絡ください。
+            運営者は、個人情報保護法に基づき、個人情報の適切な管理・保護に努めます。
+            個人情報の漏えい・滅失・毀損の防止のため、セキュリティ対策を講じ、定期的に見直しを行います。
+            個人情報の取り扱いを外部に委託する場合は、委託先に対して適切な管理を求めます。
+          </p>
+        </section>
+
+        <section className="flex flex-col gap-2">
+          <h2 className="font-bold text-gray-800">第12条（お問い合わせ）</h2>
+          <p>本ポリシーに関するお問い合わせは、下記までご連絡ください。</p>
+          <p className="text-gray-500">
+            個人情報取り扱い責任者：Belle Vie<br />
+            メール：nobimeshi.app@gmail.com<br />
+            受付時間：平日 10:00〜18:00（土日祝・年末年始を除く）
           </p>
         </section>
       </div>
