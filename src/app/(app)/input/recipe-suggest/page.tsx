@@ -73,7 +73,7 @@ export default function RecipeSuggestPage() {
         <div className="bg-orange-50 rounded-2xl p-4 flex items-start gap-3">
           <Refrigerator className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
           <p className="text-sm text-gray-600 leading-relaxed">
-            冷蔵庫にある食材を入力してください。AIが子供の年齢・栄養バランスを考慮したレシピを提案します。アレルギー食材は自動的に除外します。
+            冷蔵庫にある食材を入力してください。子供の年齢・栄養バランスを考慮したレシピを提案します。アレルギー食材は自動的に除外します。
           </p>
         </div>
 
