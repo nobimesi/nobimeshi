@@ -278,7 +278,7 @@ export default function OnboardingPage() {
       return
     }
 
-    router.replace('/dashboard')
+    router.replace('/home')
   }
 
   const slideClass = visible
