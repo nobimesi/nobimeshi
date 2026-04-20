@@ -1,10 +1,94 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
-import { Loader2, Eye, EyeOff, ArrowLeft, Check } from 'lucide-react'
+import { Loader2, Eye, EyeOff, ArrowLeft, Check, AlertTriangle, ExternalLink } from 'lucide-react'
 
 type Mode = 'login' | 'signup' | 'reset'
+
+function detectWebView(): boolean {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent
+  // Android WebView
+  if (/Android/.test(ua) && /wv\)/.test(ua)) return true
+  // iOS WebView（SafariなしのAppleWebKit）
+  if (/iPhone|iPad|iPod/.test(ua) && /AppleWebKit/.test(ua) && !/Safari/.test(ua)) return true
+  // 主要アプリ内ブラウザ（LINE, Facebook, Instagram, Twitter/X など）
+  if (/FBAN|FBAV|Instagram|Line\/|Twitter|Snapchat|TikTok|MicroMessenger/.test(ua)) return true
+  return false
+}
+
+function getOpenUrl(): string {
+  if (typeof window === 'undefined') return ''
+  return window.location.href
+}
+
+function WebViewWarning() {
+  const url = getOpenUrl()
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+  const copyUrl = () => {
+    navigator.clipboard?.writeText(url).catch(() => {})
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
+      <div className="w-full max-w-sm flex flex-col items-center gap-6 text-center">
+        {/* アイコン */}
+        <div className="w-20 h-20 rounded-3xl overflow-hidden shadow-lg shadow-orange-200">
+          <img src="/icon.png" alt="のびメシ" className="w-full h-full object-cover" />
+        </div>
+
+        {/* 警告アイコン */}
+        <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center">
+          <AlertTriangle className="w-7 h-7 text-amber-500" />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h2 className="text-lg font-bold text-gray-800">ブラウザで開いてください</h2>
+          <p className="text-sm text-gray-500 leading-relaxed">
+            アプリ内ブラウザからのGoogleログインはセキュリティ上の理由で利用できません。
+            {isIOS ? 'Safari' : 'Chrome'}などの外部ブラウザで開いてからログインしてください。
+          </p>
+        </div>
+
+        {/* iOS向け手順 */}
+        {isIOS ? (
+          <div className="w-full bg-orange-50 rounded-2xl p-4 text-left flex flex-col gap-2">
+            <p className="text-xs font-semibold text-orange-700">Safariで開く手順</p>
+            <ol className="text-xs text-gray-600 flex flex-col gap-1.5 list-decimal pl-4">
+              <li>画面下部または右上の <span className="font-medium">「…」「︙」「共有」</span> ボタンをタップ</li>
+              <li><span className="font-medium">「Safariで開く」</span> または <span className="font-medium">「ブラウザで開く」</span> を選択</li>
+              <li>Safariでログインする</li>
+            </ol>
+          </div>
+        ) : (
+          <div className="w-full bg-orange-50 rounded-2xl p-4 text-left flex flex-col gap-2">
+            <p className="text-xs font-semibold text-orange-700">Chromeで開く手順</p>
+            <ol className="text-xs text-gray-600 flex flex-col gap-1.5 list-decimal pl-4">
+              <li>画面右上の <span className="font-medium">「︙」</span> メニューをタップ</li>
+              <li><span className="font-medium">「Chromeで開く」</span> または <span className="font-medium">「ブラウザで開く」</span> を選択</li>
+              <li>Chromeでログインする</li>
+            </ol>
+          </div>
+        )}
+
+        {/* URLコピーボタン */}
+        <button
+          onClick={copyUrl}
+          className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-3 text-sm text-gray-600 hover:bg-gray-50"
+        >
+          <ExternalLink className="w-4 h-4" />
+          URLをコピーしてブラウザで開く
+        </button>
+
+        <p className="text-xs text-gray-400">
+          メールアドレスとパスワードでのログインはこのままご利用いただけます
+        </p>
+      </div>
+    </div>
+  )
+}
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
@@ -14,6 +98,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [resetSent, setResetSent] = useState(false)
+  const [isWebView, setIsWebView] = useState(false)
+
+  useEffect(() => {
+    setIsWebView(detectWebView())
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,6 +144,11 @@ export default function LoginPage() {
       <p className="text-sm text-gray-400 mt-1">子供の成長を食事からサポート</p>
     </div>
   )
+
+  // WebView検出時は警告画面を表示
+  if (isWebView) {
+    return <WebViewWarning />
+  }
 
   // パスワードリセット画面
   if (mode === 'reset') {
