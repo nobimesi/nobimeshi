@@ -1,89 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getToken } from 'next-auth/jwt'
-import { createServiceClient } from '@/lib/supabase'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { getSupabaseClient } from '@/lib/supabase'
 
-// JWT トークンからユーザー情報を取得するヘルパー
-async function getUserFromToken(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-  if (!token?.email) return null
-  return {
-    email: token.email as string,
-    name: (token.name as string) ?? null,
-  }
-}
+// ユーザーをメールアドレスで取得、なければ作成して id を返す
+async function getOrCreateUser(email: string, name: string | null): Promise<string | null> {
+  const supabase = getSupabaseClient()
 
-// ユーザーを取得（なければ作成）
-// INSERT と SELECT を分離してチェーンエラーを排除
-async function getOrCreateUser(
-  supabase: SupabaseClient,
-  email: string,
-  name: string | null
-): Promise<{ id: string } | null> {
-  // 1. SELECT
-  const { data: selectRows, error: selectError } = await supabase
+  // SELECT
+  const { data: rows, error: selectError } = await supabase
     .from('users')
     .select('id')
     .eq('email', email)
     .limit(1)
 
   if (selectError) {
-    console.error('[getOrCreateUser] SELECT error:', selectError.message, selectError.code)
+    console.error('[getOrCreateUser] select error:', selectError.message)
     return null
   }
-  if (selectRows && selectRows.length > 0) {
-    return selectRows[0] as { id: string }
+
+  if (rows && rows.length > 0) {
+    return rows[0].id as string
   }
 
-  // 2. INSERT
+  // INSERT
   const { error: insertError } = await supabase
     .from('users')
     .insert({ email, name })
 
-  if (insertError) {
-    // 23505 = unique 制約違反（並行リクエストで先に挿入済み）→ 再 SELECT
-    if (insertError.code === '23505') {
-      const { data: retryRows } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .limit(1)
-      return retryRows?.[0] ?? null
-    }
-    console.error('[getOrCreateUser] INSERT error:', insertError.message, insertError.code, insertError.details)
+  if (insertError && insertError.code !== '23505') {
+    console.error('[getOrCreateUser] insert error:', insertError.message, insertError.code)
     return null
   }
 
-  // 3. INSERT 後に改めて SELECT
-  const { data: afterRows, error: afterError } = await supabase
+  // INSERT 後に再 SELECT
+  const { data: newRows, error: newSelectError } = await supabase
     .from('users')
     .select('id')
     .eq('email', email)
     .limit(1)
 
-  if (afterError) {
-    console.error('[getOrCreateUser] SELECT after INSERT error:', afterError.message)
+  if (newSelectError) {
+    console.error('[getOrCreateUser] select after insert error:', newSelectError.message)
     return null
   }
 
-  return afterRows?.[0] ?? null
+  return newRows?.[0]?.id ?? null
 }
 
 // 子供一覧を取得
-export async function GET(req: NextRequest) {
-  const tokenUser = await getUserFromToken(req)
-  if (!tokenUser) {
+export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
     return NextResponse.json({ children: [] }, { status: 401 })
   }
 
-  const supabase = createServiceClient()
-  const user = await getOrCreateUser(supabase, tokenUser.email, tokenUser.name)
-  if (!user) return NextResponse.json({ children: [] })
+  const userId = await getOrCreateUser(session.user.email, session.user.name ?? null)
+  if (!userId) return NextResponse.json({ children: [] })
 
+  const supabase = getSupabaseClient()
   const { data: children } = await supabase
     .from('children')
     .select('id, name, birth_date, gender, avatar')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: true })
 
   return NextResponse.json({ children: children ?? [] })
@@ -91,8 +70,8 @@ export async function GET(req: NextRequest) {
 
 // 子供を登録
 export async function POST(req: NextRequest) {
-  const tokenUser = await getUserFromToken(req)
-  if (!tokenUser) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -103,21 +82,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '名前と生年月日は必須です' }, { status: 400 })
   }
 
-  const supabase = createServiceClient()
-  const user = await getOrCreateUser(supabase, tokenUser.email, tokenUser.name)
-
-  if (!user) {
-    return NextResponse.json(
-      { error: 'ユーザーの取得に失敗しました。サーバーログを確認してください。' },
-      { status: 500 }
-    )
+  const userId = await getOrCreateUser(session.user.email, session.user.name ?? null)
+  if (!userId) {
+    return NextResponse.json({ error: 'ユーザーの取得に失敗しました' }, { status: 500 })
   }
 
-  // children INSERT
+  const supabase = getSupabaseClient()
+
   const { error: childInsertError } = await supabase
     .from('children')
     .insert({
-      user_id: user.id,
+      user_id: userId,
       name: name.trim(),
       birth_date: birthDate,
       gender: gender || null,
@@ -137,7 +112,7 @@ export async function POST(req: NextRequest) {
     const { data: childRow } = await supabase
       .from('children')
       .select('id')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
 
