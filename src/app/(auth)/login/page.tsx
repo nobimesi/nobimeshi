@@ -26,9 +26,26 @@ function getOpenUrl(): string {
 function WebViewWarning() {
   const url = getOpenUrl()
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  const [copied, setCopied] = useState(false)
 
-  const copyUrl = () => {
-    navigator.clipboard?.writeText(url).catch(() => {})
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch {
+      // clipboard API非対応の場合はフォールバック
+      const el = document.createElement('textarea')
+      el.value = url
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }
   }
 
   return (
@@ -76,10 +93,17 @@ function WebViewWarning() {
         {/* URLコピーボタン */}
         <button
           onClick={copyUrl}
-          className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-xl py-3 text-sm text-gray-600 hover:bg-gray-50"
+          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm transition-colors ${
+            copied
+              ? 'bg-green-50 border border-green-200 text-green-600'
+              : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+          }`}
         >
-          <ExternalLink className="w-4 h-4" />
-          URLをコピーしてブラウザで開く
+          {copied ? (
+            <><Check className="w-4 h-4" />コピーしました！ブラウザに貼り付けて開いてください</>
+          ) : (
+            <><ExternalLink className="w-4 h-4" />URLをコピーしてブラウザで開く</>
+          )}
         </button>
 
         <p className="text-xs text-gray-400">
