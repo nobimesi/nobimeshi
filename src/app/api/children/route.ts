@@ -14,8 +14,11 @@ export async function GET() {
 
   const { data: user } = await supabase
     .from('users')
+    .upsert(
+      { email: session.user.email, name: session.user.name ?? null },
+      { onConflict: 'email', ignoreDuplicates: false }
+    )
     .select('id')
-    .eq('email', session.user.email)
     .single()
 
   if (!user) return NextResponse.json({ children: [] })
@@ -45,23 +48,20 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServiceClient()
 
-  // ユーザー取得（なければ作成）
-  let { data: user } = await supabase
+  // ユーザーをupsert（存在すればそのまま取得、なければ作成）
+  const { data: user, error: userError } = await supabase
     .from('users')
+    .upsert(
+      { email: session.user.email, name: session.user.name ?? null },
+      { onConflict: 'email', ignoreDuplicates: false }
+    )
     .select('id')
-    .eq('email', session.user.email)
     .single()
 
-  if (!user) {
-    const { data: newUser } = await supabase
-      .from('users')
-      .insert({ email: session.user.email, name: session.user.name })
-      .select('id')
-      .single()
-    user = newUser
+  if (userError || !user) {
+    console.error('user upsert error:', userError)
+    return NextResponse.json({ error: 'ユーザーの取得に失敗しました' }, { status: 500 })
   }
-
-  if (!user) return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 500 })
 
   const { data: child, error } = await supabase
     .from('children')

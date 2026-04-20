@@ -71,8 +71,7 @@ export const authOptions: NextAuthOptions = {
           await supabase.from('users').insert({
             email: user.email,
             name: user.name,
-            avatar_url: user.image,
-            provider: 'google',
+            image: user.image,
           })
         }
       }
