@@ -29,18 +29,7 @@ function WebViewWarning() {
   const [copied, setCopied] = useState(false)
 
   const handleOpenButton = async () => {
-    try {
-      await navigator.clipboard.writeText(url)
-    } catch {
-      const el = document.createElement('textarea')
-      el.value = url
-      el.style.position = 'fixed'
-      el.style.opacity = '0'
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-    }
+    await navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
   }
