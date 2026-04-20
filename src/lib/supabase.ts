@@ -12,7 +12,7 @@ export const getSupabaseClient = () => {
 
 export const createServiceClient = () => {
   const url = getSupabaseUrl()
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
   if (!url || !serviceRoleKey) throw new Error('Supabase service env vars not set')
   return createClient(url, serviceRoleKey, {
     auth: {
