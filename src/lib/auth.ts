@@ -4,7 +4,20 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { createServiceClient } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 
+const isProd = process.env.NODE_ENV === 'production'
+
 export const authOptions: NextAuthOptions = {
+  cookies: {
+    sessionToken: {
+      name: isProd ? '__Secure-next-auth.session-token' : 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: isProd ? 'none' : 'lax',
+        path: '/',
+        secure: isProd,
+      },
+    },
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,

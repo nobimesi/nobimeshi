@@ -1,14 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { getToken } from 'next-auth/jwt'
-import { authOptions } from '@/lib/auth'
+import { decode } from 'next-auth/jwt'
 import { getSupabaseClient } from '@/lib/supabase'
+
+// Cookieから直接JWT(next-auth.session-token)を読み取ってデコード
+async function resolveEmailAndName(
+  req: NextRequest,
+): Promise<{ email: string; name: string | null } | null> {
+  const secret = process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    console.error('[resolveEmailAndName] NEXTAUTH_SECRET is not set')
+    return null
+  }
+
+  // 本番: __Secure-next-auth.session-token / 開発: next-auth.session-token
+  const cookieNames = [
+    '__Secure-next-auth.session-token',
+    'next-auth.session-token',
+  ]
+
+  const cookieHeader = req.headers.get('cookie') ?? ''
+  let rawToken: string | undefined
+
+  for (const name of cookieNames) {
+    const entry = cookieHeader
+      .split(';')
+      .map(c => c.trim())
+      .find(c => c.startsWith(`${name}=`))
+    if (entry) {
+      rawToken = entry.slice(name.length + 1) // "name=" の後ろ全部
+      break
+    }
+  }
+
+  if (!rawToken) {
+    console.error('[resolveEmailAndName] session cookie not found', {
+      cookieKeys: cookieHeader
+        .split(';')
+        .map(c => c.trim().split('=')[0])
+        .filter(Boolean),
+    })
+    return null
+  }
+
+  try {
+    const decoded = await decode({ token: rawToken, secret })
+    if (!decoded?.email) {
+      console.error('[resolveEmailAndName] decoded token has no email', decoded)
+      return null
+    }
+    return {
+      email: decoded.email as string,
+      name: (decoded.name as string) ?? null,
+    }
+  } catch (err) {
+    console.error('[resolveEmailAndName] JWT decode error:', err)
+    return null
+  }
+}
 
 // ユーザーをメールアドレスで取得、なければ作成して id を返す
 async function getOrCreateUser(email: string, name: string | null): Promise<string | null> {
   const supabase = getSupabaseClient()
 
-  // SELECT
   const { data: rows, error: selectError } = await supabase
     .from('users')
     .select('id')
@@ -20,11 +73,8 @@ async function getOrCreateUser(email: string, name: string | null): Promise<stri
     return null
   }
 
-  if (rows && rows.length > 0) {
-    return rows[0].id as string
-  }
+  if (rows && rows.length > 0) return rows[0].id as string
 
-  // INSERT
   const { error: insertError } = await supabase
     .from('users')
     .insert({ email, name })
@@ -34,7 +84,6 @@ async function getOrCreateUser(email: string, name: string | null): Promise<stri
     return null
   }
 
-  // INSERT 後に再 SELECT
   const { data: newRows, error: newSelectError } = await supabase
     .from('users')
     .select('id')
@@ -49,50 +98,28 @@ async function getOrCreateUser(email: string, name: string | null): Promise<stri
   return newRows?.[0]?.id ?? null
 }
 
-// セッション取得（getServerSession + getToken フォールバック）
-async function resolveEmailAndName(req: NextRequest): Promise<{ email: string; name: string | null } | null> {
-  // まず getServerSession を試みる
-  const session = await getServerSession(authOptions)
-  if (session?.user?.email) {
-    return { email: session.user.email, name: session.user.name ?? null }
-  }
-
-  // フォールバック: JWT トークンを直接読む（モバイル Safari 対応）
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-  if (token?.email) {
-    return { email: token.email as string, name: (token.name as string) ?? null }
-  }
-
-  return null
-}
-
 // 子供一覧を取得
 export async function GET(req: NextRequest) {
   const identity = await resolveEmailAndName(req)
 
   if (!identity) {
-    // デバッグ: セッション・トークン両方 null の詳細情報
-    const session = await getServerSession(authOptions)
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     const cookieHeader = req.headers.get('cookie') ?? ''
-    const hasCookie = cookieHeader.includes('next-auth.session-token') || cookieHeader.includes('__Secure-next-auth.session-token')
-    console.error('[GET /api/children] auth failed', {
-      session: session ?? 'null',
-      tokenEmail: token?.email ?? 'null',
-      hasCookie,
-      cookieKeys: cookieHeader.split(';').map(c => c.trim().split('=')[0]).filter(Boolean),
-      nextauthUrl: process.env.NEXTAUTH_URL ?? 'not set',
-    })
-    return NextResponse.json({
-      children: [],
-      _debug: {
-        sessionNull: !session,
-        tokenNull: !token,
-        tokenEmail: token?.email ?? null,
-        hasCookie,
-        nextauthUrl: process.env.NEXTAUTH_URL ?? 'not set',
+    return NextResponse.json(
+      {
+        children: [],
+        _debug: {
+          hasCookie:
+            cookieHeader.includes('next-auth.session-token') ||
+            cookieHeader.includes('__Secure-next-auth.session-token'),
+          cookieKeys: cookieHeader
+            .split(';')
+            .map(c => c.trim().split('=')[0])
+            .filter(Boolean),
+          nextauthUrl: process.env.NEXTAUTH_URL ?? 'not set',
+        },
       },
-    }, { status: 401 })
+      { status: 401 },
+    )
   }
 
   const userId = await getOrCreateUser(identity.email, identity.name)
@@ -112,8 +139,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const identity = await resolveEmailAndName(req)
   if (!identity) {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    console.error('[POST /api/children] auth failed', { tokenEmail: token?.email ?? 'null', nextauthUrl: process.env.NEXTAUTH_URL ?? 'not set' })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -145,7 +170,7 @@ export async function POST(req: NextRequest) {
     console.error('[POST /api/children] insert error:', childInsertError.message, childInsertError.code)
     return NextResponse.json(
       { error: `保存に失敗しました: ${childInsertError.message}` },
-      { status: 500 }
+      { status: 500 },
     )
   }
 
