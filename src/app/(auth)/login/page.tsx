@@ -28,7 +28,7 @@ function WebViewWarning() {
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const [copied, setCopied] = useState(false)
 
-  const copyToClipboard = async () => {
+  const handleOpenButton = async () => {
     try {
       await navigator.clipboard.writeText(url)
     } catch {
@@ -43,21 +43,6 @@ function WebViewWarning() {
     }
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
-  }
-
-  const handleOpenButton = () => {
-    if (isIOS) {
-      // safari-web:// スキームでSafariを開こうと試みる
-      window.location.href = 'safari-web://nobimeshi.vercel.app/login'
-      // ページが非表示にならなかった場合（スキーム失敗）→ クリップボードにコピー
-      setTimeout(() => {
-        if (!document.hidden) {
-          copyToClipboard()
-        }
-      }, 1500)
-    } else {
-      copyToClipboard()
-    }
   }
 
   return (
