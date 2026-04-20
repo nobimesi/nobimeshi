@@ -4,43 +4,62 @@ import { authOptions } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-// ユーザーを取得（なければ作成）。maybeSingle() を使い 0 行でもエラーにしない
-async function getOrCreateUser(supabase: SupabaseClient, email: string, name: string | null) {
-  // 1. まず SELECT
-  const { data: existing, error: selectError } = await supabase
+// ユーザーを取得（なければ作成）
+// - maybeSingle() は使わず limit(1) + 配列アクセスで確実に取得
+// - INSERT と SELECT を分離してチェーンエラーを排除
+async function getOrCreateUser(
+  supabase: SupabaseClient,
+  email: string,
+  name: string | null
+): Promise<{ id: string } | null> {
+  // 1. SELECT
+  const { data: selectRows, error: selectError } = await supabase
     .from('users')
     .select('id')
     .eq('email', email)
-    .maybeSingle()
+    .limit(1)
 
   if (selectError) {
-    console.error('users select error:', selectError)
+    console.error('[getOrCreateUser] SELECT error:', selectError.message, selectError.code)
     return null
   }
-  if (existing) return existing
 
-  // 2. 見つからなければ INSERT
-  const { data: created, error: insertError } = await supabase
+  if (selectRows && selectRows.length > 0) {
+    return selectRows[0] as { id: string }
+  }
+
+  // 2. INSERT（SELECT + chain ではなく分離して実行）
+  const { error: insertError } = await supabase
     .from('users')
     .insert({ email, name })
-    .select('id')
-    .maybeSingle()
 
   if (insertError) {
-    // unique 制約違反 (23505) = 並行リクエストで先に INSERT されたので再 SELECT
+    // 23505 = unique 制約違反（並行リクエストで先に挿入済み）→ 再 SELECT
     if (insertError.code === '23505') {
-      const { data: retry } = await supabase
+      const { data: retryRows } = await supabase
         .from('users')
         .select('id')
         .eq('email', email)
-        .maybeSingle()
-      return retry ?? null
+        .limit(1)
+      return retryRows?.[0] ?? null
     }
-    console.error('users insert error:', insertError)
+    console.error('[getOrCreateUser] INSERT error:', insertError.message, insertError.code, insertError.details)
     return null
   }
 
-  return created ?? null
+  // 3. INSERT 後に改めて SELECT（チェーンを避けて確実に取得）
+  const { data: afterRows, error: afterError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .limit(1)
+
+  if (afterError) {
+    console.error('[getOrCreateUser] SELECT after INSERT error:', afterError.message)
+    return null
+  }
+
+  return afterRows?.[0] ?? null
 }
 
 // 子供一覧を取得
@@ -71,7 +90,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { name, birthDate, gender, height, weight, activity, emoji } = body
+  const { name, birthDate, gender, height, weight, emoji } = body
 
   if (!name?.trim() || !birthDate) {
     return NextResponse.json({ error: '名前と生年月日は必須です' }, { status: 400 })
@@ -81,10 +100,15 @@ export async function POST(req: NextRequest) {
   const user = await getOrCreateUser(supabase, session.user.email, session.user.name ?? null)
 
   if (!user) {
-    return NextResponse.json({ error: 'ユーザーの取得に失敗しました' }, { status: 500 })
+    // サーバーログに詳細が出ているはずなので、クライアント側にも情報を返す
+    return NextResponse.json(
+      { error: 'ユーザーの取得に失敗しました。サーバーログを確認してください。' },
+      { status: 500 }
+    )
   }
 
-  const { data: child, error: childError } = await supabase
+  // children INSERT
+  const { error: childInsertError } = await supabase
     .from('children')
     .insert({
       user_id: user.id,
@@ -93,23 +117,33 @@ export async function POST(req: NextRequest) {
       gender: gender || null,
       avatar: emoji || '👦',
     })
-    .select()
-    .single()
 
-  if (childError) {
-    console.error('children insert error:', childError)
-    return NextResponse.json({ error: '保存に失敗しました' }, { status: 500 })
+  if (childInsertError) {
+    console.error('[POST /api/children] children insert error:', childInsertError.message, childInsertError.code)
+    return NextResponse.json(
+      { error: `保存に失敗しました: ${childInsertError.message}` },
+      { status: 500 }
+    )
   }
 
   // 身長・体重がある場合は成長記録にも保存
   if (height || weight) {
-    await supabase.from('growth_records').insert({
-      child_id: child.id,
-      recorded_at: new Date().toISOString().split('T')[0],
-      height: height ? parseFloat(height) : null,
-      weight: weight ? parseFloat(weight) : null,
-    })
+    const { data: childRow } = await supabase
+      .from('children')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (childRow?.[0]) {
+      await supabase.from('growth_records').insert({
+        child_id: childRow[0].id,
+        recorded_at: new Date().toISOString().split('T')[0],
+        height: height ? parseFloat(height) : null,
+        weight: weight ? parseFloat(weight) : null,
+      })
+    }
   }
 
-  return NextResponse.json({ child })
+  return NextResponse.json({ ok: true })
 }
