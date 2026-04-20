@@ -28,13 +28,10 @@ function WebViewWarning() {
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
   const [copied, setCopied] = useState(false)
 
-  const copyUrl = async () => {
+  const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
     } catch {
-      // clipboard API非対応の場合はフォールバック
       const el = document.createElement('textarea')
       el.value = url
       el.style.position = 'fixed'
@@ -43,8 +40,23 @@ function WebViewWarning() {
       el.select()
       document.execCommand('copy')
       document.body.removeChild(el)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
+
+  const handleOpenButton = () => {
+    if (isIOS) {
+      // safari-web:// スキームでSafariを開こうと試みる
+      window.location.href = 'safari-web://nobimeshi.vercel.app/login'
+      // ページが非表示にならなかった場合（スキーム失敗）→ クリップボードにコピー
+      setTimeout(() => {
+        if (!document.hidden) {
+          copyToClipboard()
+        }
+      }, 1500)
+    } else {
+      copyToClipboard()
     }
   }
 
@@ -92,7 +104,7 @@ function WebViewWarning() {
 
         {/* URLコピーボタン */}
         <button
-          onClick={copyUrl}
+          onClick={handleOpenButton}
           className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm transition-colors ${
             copied
               ? 'bg-green-50 border border-green-200 text-green-600'
