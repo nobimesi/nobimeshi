@@ -120,6 +120,8 @@ export async function PATCH(req: NextRequest) {
       gender: gender || null,
       avatar: avatar || '👦',
       activity_level: activity_level || '普通',
+      height: height ? parseFloat(height) : null,
+      weight: weight ? parseFloat(weight) : null,
     })
     .eq('id', id)
     .eq('user_id', session.user.email)
