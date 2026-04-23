@@ -95,3 +95,52 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+// 子供のプロフィールを更新
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await req.json()
+  const { id, name, birth_date, gender, avatar, activity_level, height, weight } = body
+
+  if (!id || !name?.trim()) {
+    return NextResponse.json({ error: 'id と名前は必須です' }, { status: 400 })
+  }
+
+  const supabase = createServiceClient()
+
+  const { error: updateError } = await supabase
+    .from('children')
+    .update({
+      name: name.trim(),
+      birth_date: birth_date || null,
+      gender: gender || null,
+      avatar: avatar || '👦',
+      activity_level: activity_level || '普通',
+    })
+    .eq('id', id)
+    .eq('user_id', session.user.email)
+
+  if (updateError) {
+    console.error('[PATCH /api/children] update error:', updateError)
+    return NextResponse.json({ error: `更新に失敗しました: ${updateError.message}` }, { status: 500 })
+  }
+
+  // 身長・体重が入力された場合は成長記録にも追加
+  if (height || weight) {
+    const { error: growthError } = await supabase.from('growth_records').insert({
+      child_id: id,
+      recorded_at: new Date().toISOString().split('T')[0],
+      height: height ? parseFloat(height) : null,
+      weight: weight ? parseFloat(weight) : null,
+    })
+    if (growthError) {
+      console.error('[PATCH /api/children] growth_records insert error:', growthError)
+    }
+  }
+
+  return NextResponse.json({ ok: true })
+}

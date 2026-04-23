@@ -29,6 +29,7 @@ function getAge(birthDate: string) {
 }
 
 type ChildFormState = {
+  id?: string
   name: string; emoji: string; birthDate: string
   gender: string; height: string; weight: string; activity: string
 }
@@ -530,7 +531,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setEditChild({ name: child.name, emoji: child.avatar, birthDate: child.birth_date, gender: child.gender ?? '', height: '', weight: '', activity: child.activity_level ?? '普通' })}
+                  onClick={() => setEditChild({ id: child.id, name: child.name, emoji: child.avatar, birthDate: child.birth_date, gender: child.gender ?? '', height: '', weight: '', activity: child.activity_level ?? '普通' })}
                   className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center"
                 >
                   <Edit3 className="w-4 h-4 text-gray-500" />
@@ -664,7 +665,23 @@ export default function SettingsPage() {
                 initial={editChild ?? undefined}
                 onSave={async (data) => {
                   if (editChild) {
-                    // 編集はUI上のみ反映（APIは未実装）
+                    await fetch('/api/children', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        id: editChild.id,
+                        name: data.name,
+                        birth_date: data.birthDate,
+                        gender: data.gender,
+                        avatar: data.emoji,
+                        activity_level: data.activity,
+                        height: data.height,
+                        weight: data.weight,
+                      }),
+                    })
+                    const res = await fetch('/api/children')
+                    const json = await res.json()
+                    setChildren(json.children ?? [])
                     setEditChild(null)
                   } else {
                     await fetch('/api/children', {
