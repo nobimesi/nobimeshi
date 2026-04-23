@@ -1,14 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Flame } from 'lucide-react'
 import Link from 'next/link'
 
-// ダミーデータ
-const CHILDREN = [
-  { id: 1, name: 'たろう', emoji: '👦', age: 6, gender: '男の子' },
-  { id: 2, name: 'はなこ', emoji: '👧', age: 4, gender: '女の子' },
-]
+type Child = {
+  id: string
+  name: string
+  avatar: string
+  birth_date: string
+  gender: string | null
+  activity_level: string | null
+}
+
+function calcAge(birthDate: string): number {
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
 
 const DUMMY_MEALS: Record<string, Record<string, { name: string; kcal: number; desc: string }[]>> = {
   breakfast: {
@@ -201,8 +213,17 @@ export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedChild, setSelectedChild] = useState(0)
   const [viewMode, setViewMode] = useState<ViewMode>('day')
+  const [children, setChildren] = useState<Child[]>([])
+
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
+
   const isToday = selectedDate.toDateString() === new Date().toDateString()
-  const child = CHILDREN[selectedChild]
+  const child = children[selectedChild]
 
   const totalKcal = NUTRIENTS_TODAY[0].value
   const targetKcal = NUTRIENTS_TODAY[0].max
@@ -220,21 +241,25 @@ export default function HomePage() {
         </div>
         {/* 子供セレクター */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
-          {CHILDREN.map((c, i) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedChild(i)}
-              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                selectedChild === i
-                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200'
-              }`}
-            >
-              <span>{c.emoji}</span>
-              {c.name}
-              <span className={`text-xs ${selectedChild === i ? 'text-orange-200' : 'text-gray-400'}`}>{c.age}歳</span>
-            </button>
-          ))}
+          {children.length === 0 ? (
+            <div className="h-8 w-24 bg-gray-100 rounded-full animate-pulse" />
+          ) : (
+            children.map((c, i) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedChild(i)}
+                className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                  selectedChild === i
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200'
+                }`}
+              >
+                <span>{c.avatar}</span>
+                {c.name}
+                <span className={`text-xs ${selectedChild === i ? 'text-orange-200' : 'text-gray-400'}`}>{calcAge(c.birth_date)}歳</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -307,7 +332,8 @@ export default function HomePage() {
         <div className="flex items-center justify-between mb-2.5">
           <h2 className="text-sm font-semibold text-gray-700">食事記録</h2>
           <span className="text-xs text-gray-400">
-            {isToday ? '今日' : `${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`}・{child.name}
+            {isToday ? '今日' : `${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`}
+            {child ? `・${child.name}` : ''}
           </span>
         </div>
         <div className="flex flex-col gap-2.5">
