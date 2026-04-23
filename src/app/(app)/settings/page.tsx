@@ -111,7 +111,7 @@ function ChildForm({
         <div className="flex-1">
           <label className="text-xs font-medium text-gray-500 mb-1.5 block">身長 (cm)</label>
           <input
-            type="number" placeholder="113.2" step="0.1" value={form.height}
+            type="number" placeholder="例: 110.5" step="0.1" value={form.height}
             onChange={e => set('height', e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
           />
@@ -119,7 +119,7 @@ function ChildForm({
         <div className="flex-1">
           <label className="text-xs font-medium text-gray-500 mb-1.5 block">体重 (kg)</label>
           <input
-            type="number" placeholder="19.1" step="0.1" value={form.weight}
+            type="number" placeholder="例: 18.0" step="0.1" value={form.weight}
             onChange={e => set('weight', e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
           />

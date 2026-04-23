@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Flame } from 'lucide-react'
 import Link from 'next/link'
 
@@ -13,6 +13,18 @@ type Child = {
   activity_level: string | null
 }
 
+type MealRecord = {
+  id: string
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
+  food_name: string
+  calories: number | null
+  protein: number | null
+  fat: number | null
+  carbs: number | null
+  notes: string | null
+  recorded_at: string
+}
+
 function calcAge(birthDate: string): number {
   const today = new Date()
   const birth = new Date(birthDate)
@@ -22,84 +34,43 @@ function calcAge(birthDate: string): number {
   return age
 }
 
-const DUMMY_MEALS: Record<string, Record<string, { name: string; kcal: number; desc: string }[]>> = {
-  breakfast: {
-    today: [
-      { name: 'ごはん（茶碗1杯）', kcal: 252, desc: '150g' },
-      { name: '味噌汁（わかめ）', kcal: 35, desc: '1杯' },
-      { name: '焼き鮭', kcal: 115, desc: '80g' },
-      { name: '牛乳', kcal: 67, desc: '110ml' },
-    ],
-  },
-  lunch: {
-    today: [
-      { name: 'チキンカレー', kcal: 520, desc: '中盛り' },
-      { name: 'サラダ', kcal: 45, desc: '野菜ミックス' },
-    ],
-  },
-  dinner: { today: [] },
-  snack: { today: [] },
-}
-
-const NUTRIENTS_TODAY = [
-  { key: 'calories', label: 'エネルギー', unit: 'kcal', color: '#FF6B35', bg: 'bg-orange-400', value: 1034, max: 1600 },
-  { key: 'protein', label: 'たんぱく質', unit: 'g', color: '#5B9BD5', bg: 'bg-blue-400', value: 38, max: 55 },
-  { key: 'carbs', label: '炭水化物', unit: 'g', color: '#F5A623', bg: 'bg-yellow-400', value: 145, max: 220 },
-  { key: 'fat', label: '脂質', unit: 'g', color: '#E07070', bg: 'bg-red-400', value: 22, max: 50 },
-  { key: 'fiber', label: '食物繊維', unit: 'g', color: '#4CAF82', bg: 'bg-green-400', value: 7, max: 16 },
+const NUTRIENT_TARGETS = [
+  { key: 'calories' as const, label: 'エネルギー', unit: 'kcal', bg: 'bg-orange-400', max: 1600 },
+  { key: 'protein' as const,  label: 'たんぱく質', unit: 'g',    bg: 'bg-blue-400',   max: 55 },
+  { key: 'carbs' as const,    label: '炭水化物',   unit: 'g',    bg: 'bg-yellow-400', max: 220 },
+  { key: 'fat' as const,      label: '脂質',       unit: 'g',    bg: 'bg-red-400',    max: 50 },
 ]
 
 const MEAL_TYPES = [
-  { key: 'breakfast', label: '朝食', icon: '🌅', time: '7:30' },
-  { key: 'lunch', label: '昼食', icon: '☀️', time: '12:15' },
-  { key: 'dinner', label: '夕食', icon: '🌙', time: '' },
-  { key: 'snack', label: 'おやつ', icon: '🍪', time: '' },
-] as const
+  { key: 'breakfast' as const, label: '朝食', icon: '🌅' },
+  { key: 'lunch'     as const, label: '昼食', icon: '☀️' },
+  { key: 'dinner'    as const, label: '夕食', icon: '🌙' },
+  { key: 'snack'     as const, label: 'おやつ', icon: '🍪' },
+]
 
 type ViewMode = 'day' | 'week' | 'month'
 
-function WeekCalendar({
-  selectedDate,
-  onSelect,
-}: {
-  selectedDate: Date
-  onSelect: (date: Date) => void
-}) {
+function WeekCalendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect: (d: Date) => void }) {
   const today = new Date()
   const weekStart = new Date(selectedDate)
   weekStart.setDate(selectedDate.getDate() - selectedDate.getDay())
-
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(weekStart.getDate() + i)
     return d
   })
-
   const dayLabels = ['日', '月', '火', '水', '木', '金', '土']
-  // 食事記録があった日（ダミー）
-  const recordedDays = [today.getDate() - 1, today.getDate() - 2, today.getDate() - 3]
-
-  const prevWeek = () => {
-    const d = new Date(selectedDate)
-    d.setDate(d.getDate() - 7)
-    onSelect(d)
-  }
-  const nextWeek = () => {
-    const d = new Date(selectedDate)
-    d.setDate(d.getDate() + 7)
-    onSelect(d)
-  }
 
   return (
     <div className="bg-white px-4 py-3 border-b border-gray-100">
       <div className="flex items-center justify-between mb-2">
-        <button onClick={prevWeek} className="p-1.5 rounded-full hover:bg-gray-100 active:bg-gray-200">
+        <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 7); onSelect(d) }} className="p-1.5 rounded-full hover:bg-gray-100">
           <ChevronLeft className="w-4 h-4 text-gray-400" />
         </button>
         <span className="text-sm font-semibold text-gray-700">
           {selectedDate.getFullYear()}年{selectedDate.getMonth() + 1}月
         </span>
-        <button onClick={nextWeek} className="p-1.5 rounded-full hover:bg-gray-100 active:bg-gray-200">
+        <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 7); onSelect(d) }} className="p-1.5 rounded-full hover:bg-gray-100">
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </button>
       </div>
@@ -107,26 +78,18 @@ function WeekCalendar({
         {days.map((day, i) => {
           const isSelected = day.toDateString() === selectedDate.toDateString()
           const isToday = day.toDateString() === today.toDateString()
-          const hasRecord = recordedDays.includes(day.getDate()) && day.getMonth() === today.getMonth()
           return (
-            <button
-              key={i}
-              onClick={() => onSelect(day)}
-              className="flex flex-col items-center py-1 rounded-xl transition-colors"
-            >
+            <button key={i} onClick={() => onSelect(day)} className="flex flex-col items-center py-1 rounded-xl">
               <span className={`text-xs mb-1 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>
                 {dayLabels[i]}
               </span>
               <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all ${
-                isSelected
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : isToday
-                  ? 'bg-orange-100 text-orange-500 font-bold'
-                  : 'text-gray-700 hover:bg-gray-100'
+                isSelected ? 'bg-orange-500 text-white shadow-sm'
+                : isToday ? 'bg-orange-100 text-orange-500 font-bold'
+                : 'text-gray-700 hover:bg-gray-100'
               }`}>
                 {day.getDate()}
               </span>
-              <div className={`w-1 h-1 rounded-full mt-0.5 ${hasRecord ? 'bg-orange-300' : 'bg-transparent'}`} />
             </button>
           )
         })}
@@ -135,32 +98,26 @@ function WeekCalendar({
   )
 }
 
-function NutritionBar({ nutrient }: { nutrient: typeof NUTRIENTS_TODAY[0] }) {
-  const pct = Math.min((nutrient.value / nutrient.max) * 100, 100)
+function NutritionBar({ label, unit, bg, value, max }: { label: string; unit: string; bg: string; value: number; max: number }) {
+  const pct = Math.min((value / max) * 100, 100)
   const isLow = pct < 50
   const isHigh = pct > 90
   return (
     <div className="flex items-center gap-2.5">
-      <span className="text-xs text-gray-500 w-16 shrink-0 font-medium">{nutrient.label}</span>
+      <span className="text-xs text-gray-500 w-16 shrink-0 font-medium">{label}</span>
       <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${nutrient.bg} ${isHigh ? 'opacity-100' : 'opacity-80'}`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full rounded-full transition-all duration-500 ${bg} ${isHigh ? 'opacity-100' : 'opacity-80'}`} style={{ width: `${pct}%` }} />
       </div>
       <div className="w-24 text-right shrink-0">
-        <span className={`text-xs font-semibold ${isLow ? 'text-gray-400' : isHigh ? 'text-orange-500' : 'text-gray-700'}`}>
-          {nutrient.value}
-        </span>
-        <span className="text-xs text-gray-300">/{nutrient.max}{nutrient.unit}</span>
+        <span className={`text-xs font-semibold ${isLow ? 'text-gray-400' : isHigh ? 'text-orange-500' : 'text-gray-700'}`}>{Math.round(value)}</span>
+        <span className="text-xs text-gray-300">/{max}{unit}</span>
       </div>
     </div>
   )
 }
 
-function MealCard({ mealType, isToday }: { mealType: typeof MEAL_TYPES[number]; isToday: boolean }) {
-  const foods = isToday ? (DUMMY_MEALS[mealType.key]?.today ?? []) : []
-  const totalKcal = foods.reduce((s, f) => s + f.kcal, 0)
+function MealCard({ mealType, foods }: { mealType: typeof MEAL_TYPES[number]; foods: MealRecord[] }) {
+  const totalKcal = foods.reduce((s, f) => s + (f.calories ?? 0), 0)
   const hasFood = foods.length > 0
 
   return (
@@ -168,17 +125,10 @@ function MealCard({ mealType, isToday }: { mealType: typeof MEAL_TYPES[number]; 
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5">
           <span className="text-xl">{mealType.icon}</span>
-          <div>
-            <span className="text-sm font-semibold text-gray-700">{mealType.label}</span>
-            {mealType.time && (
-              <span className="text-xs text-gray-400 ml-2">{mealType.time}</span>
-            )}
-          </div>
+          <span className="text-sm font-semibold text-gray-700">{mealType.label}</span>
         </div>
         <div className="flex items-center gap-2">
-          {hasFood && (
-            <span className="text-xs font-bold text-orange-500">{totalKcal}kcal</span>
-          )}
+          {hasFood && <span className="text-xs font-bold text-orange-500">{Math.round(totalKcal)}kcal</span>}
           <Link
             href={`/input/manual?meal=${mealType.key}`}
             className="w-7 h-7 bg-orange-50 rounded-full flex items-center justify-center active:bg-orange-100"
@@ -189,20 +139,20 @@ function MealCard({ mealType, isToday }: { mealType: typeof MEAL_TYPES[number]; 
       </div>
       {hasFood ? (
         <div className="px-4 pb-3 flex flex-col gap-2 border-t border-gray-50">
-          {foods.map((food, i) => (
-            <div key={i} className="flex items-center justify-between py-1">
+          {foods.map((food) => (
+            <div key={food.id} className="flex items-center justify-between py-1">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-orange-300 shrink-0" />
-                <span className="text-sm text-gray-700">{food.name}</span>
-                <span className="text-xs text-gray-400">{food.desc}</span>
+                <span className="text-sm text-gray-700">{food.food_name}</span>
+                {food.notes && <span className="text-xs text-gray-400">{food.notes}</span>}
               </div>
-              <span className="text-xs text-gray-500">{food.kcal}kcal</span>
+              {food.calories !== null && <span className="text-xs text-gray-500">{Math.round(food.calories)}kcal</span>}
             </div>
           ))}
         </div>
       ) : (
         <div className="px-4 pb-3 border-t border-gray-50">
-          <p className="text-xs text-gray-300 text-center py-2">タップして記録する</p>
+          <p className="text-xs text-gray-300 text-center py-2">まだ記録がありません</p>
         </div>
       )}
     </div>
@@ -214,6 +164,8 @@ export default function HomePage() {
   const [selectedChild, setSelectedChild] = useState(0)
   const [viewMode, setViewMode] = useState<ViewMode>('day')
   const [children, setChildren] = useState<Child[]>([])
+  const [mealRecords, setMealRecords] = useState<MealRecord[]>([])
+  const [loadingMeals, setLoadingMeals] = useState(false)
 
   useEffect(() => {
     fetch('/api/children')
@@ -222,12 +174,34 @@ export default function HomePage() {
       .catch(console.error)
   }, [])
 
+  const fetchMeals = useCallback((childId: string, date: Date) => {
+    const dateStr = date.toISOString().split('T')[0]
+    setLoadingMeals(true)
+    fetch(`/api/meal-records?childId=${childId}&date=${dateStr}`)
+      .then(r => r.json())
+      .then(d => setMealRecords(d.records ?? []))
+      .catch(console.error)
+      .finally(() => setLoadingMeals(false))
+  }, [])
+
+  useEffect(() => {
+    const child = children[selectedChild]
+    if (!child) return
+    fetchMeals(child.id, selectedDate)
+  }, [children, selectedChild, selectedDate, fetchMeals])
+
   const isToday = selectedDate.toDateString() === new Date().toDateString()
   const child = children[selectedChild]
 
-  const totalKcal = NUTRIENTS_TODAY[0].value
-  const targetKcal = NUTRIENTS_TODAY[0].max
-  const kcalPct = Math.round((totalKcal / targetKcal) * 100)
+  // 栄養素合計
+  const totals = {
+    calories: mealRecords.reduce((s, r) => s + (r.calories ?? 0), 0),
+    protein:  mealRecords.reduce((s, r) => s + (r.protein ?? 0), 0),
+    carbs:    mealRecords.reduce((s, r) => s + (r.carbs ?? 0), 0),
+    fat:      mealRecords.reduce((s, r) => s + (r.fat ?? 0), 0),
+  }
+  const targetKcal = NUTRIENT_TARGETS[0].max
+  const kcalPct = Math.min(Math.round((totals.calories / targetKcal) * 100), 100)
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -239,7 +213,6 @@ export default function HomePage() {
             <p className="text-xs text-gray-400">子供の食事・栄養管理</p>
           </div>
         </div>
-        {/* 子供セレクター */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5">
           {children.length === 0 ? (
             <div className="h-8 w-24 bg-gray-100 rounded-full animate-pulse" />
@@ -275,7 +248,7 @@ export default function HomePage() {
                 {isToday ? '今日' : `${selectedDate.getMonth() + 1}/${selectedDate.getDate()}`}の摂取カロリー
               </p>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold text-gray-800">{totalKcal.toLocaleString()}</span>
+                <span className="text-3xl font-bold text-gray-800">{Math.round(totals.calories).toLocaleString()}</span>
                 <span className="text-sm text-gray-400">/ {targetKcal.toLocaleString()} kcal</span>
               </div>
             </div>
@@ -284,10 +257,7 @@ export default function HomePage() {
                 <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
                   <circle cx="32" cy="32" r="26" fill="none" stroke="#f3f4f6" strokeWidth="8" />
                   <circle
-                    cx="32" cy="32" r="26"
-                    fill="none"
-                    stroke="#FF6B35"
-                    strokeWidth="8"
+                    cx="32" cy="32" r="26" fill="none" stroke="#FF6B35" strokeWidth="8"
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 26}`}
                     strokeDashoffset={`${2 * Math.PI * 26 * (1 - kcalPct / 100)}`}
@@ -302,28 +272,32 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 期間切り替え */}
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-gray-600">五大栄養素</span>
+            <span className="text-xs font-semibold text-gray-600">栄養素</span>
             <div className="flex bg-gray-100 rounded-full p-0.5">
               {(['day', 'week', 'month'] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
-                  className={`text-xs px-2.5 py-1 rounded-full transition-colors ${
-                    viewMode === mode ? 'bg-white text-orange-500 font-semibold shadow-sm' : 'text-gray-400'
-                  }`}
+                  className={`text-xs px-2.5 py-1 rounded-full transition-colors ${viewMode === mode ? 'bg-white text-orange-500 font-semibold shadow-sm' : 'text-gray-400'}`}
                 >
                   {mode === 'day' ? '今日' : mode === 'week' ? '週' : '月'}
                 </button>
               ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2.5">
-            {NUTRIENTS_TODAY.map((n) => (
-              <NutritionBar key={n.key} nutrient={n} />
-            ))}
-          </div>
+
+          {loadingMeals ? (
+            <div className="flex flex-col gap-2.5">
+              {[0, 1, 2, 3].map(i => <div key={i} className="h-4 bg-gray-100 rounded-full animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {NUTRIENT_TARGETS.map(n => (
+                <NutritionBar key={n.key} label={n.label} unit={n.unit} bg={n.bg} value={totals[n.key]} max={n.max} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -338,27 +312,36 @@ export default function HomePage() {
         </div>
         <div className="flex flex-col gap-2.5">
           {MEAL_TYPES.map((meal) => (
-            <MealCard key={meal.key} mealType={meal} isToday={isToday} />
+            <MealCard
+              key={meal.key}
+              mealType={meal}
+              foods={mealRecords.filter(r => r.meal_type === meal.key)}
+            />
           ))}
         </div>
       </div>
 
-      {/* AIレポート */}
-      <div className="px-4 py-2 pb-6">
-        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 border border-orange-100">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center shrink-0 shadow-sm">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs font-bold text-orange-500 mb-1">AIからのアドバイス</p>
-              <p className="text-sm text-gray-700 leading-relaxed">
-                今日はたんぱく質と炭水化物が良いバランスです！夕食では<span className="font-semibold text-orange-600">食物繊維</span>と<span className="font-semibold text-orange-600">鉄分</span>を意識しましょう。ほうれん草やブロッコリーを加えると◎
-              </p>
+      {/* アドバイスバナー（記録がある日のみ） */}
+      {mealRecords.length > 0 && (
+        <div className="px-4 py-2 pb-6">
+          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 border border-orange-100">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center shrink-0 shadow-sm">
+                <Flame className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-orange-500 mb-1">今日の栄養</p>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {kcalPct >= 80
+                    ? `目標の${kcalPct}%を達成しています！バランスよく食べられていますね。`
+                    : `今日はまだ目標の${kcalPct}%です。夕食でしっかり栄養を補いましょう。`
+                  }
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
