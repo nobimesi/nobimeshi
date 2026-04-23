@@ -131,16 +131,19 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: `更新に失敗しました: ${updateError.message}` }, { status: 500 })
   }
 
-  // 身長・体重が入力された場合は成長記録にも追加
+  // 身長・体重が入力された場合は成長記録をupsert（同日レコードがあれば更新、なければ追加）
   if (height || weight) {
-    const { error: growthError } = await supabase.from('growth_records').insert({
-      child_id: id,
-      recorded_at: new Date().toISOString().split('T')[0],
-      height: height ? parseFloat(height) : null,
-      weight: weight ? parseFloat(weight) : null,
-    })
+    const { error: growthError } = await supabase.from('growth_records').upsert(
+      {
+        child_id: id,
+        recorded_at: new Date().toISOString().split('T')[0],
+        height: height ? parseFloat(height) : null,
+        weight: weight ? parseFloat(weight) : null,
+      },
+      { onConflict: 'child_id,recorded_at' },
+    )
     if (growthError) {
-      console.error('[PATCH /api/children] growth_records insert error:', growthError)
+      console.error('[PATCH /api/children] growth_records upsert error:', growthError)
     }
   }
 
