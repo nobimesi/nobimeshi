@@ -466,11 +466,17 @@ export default function SettingsPage() {
   const { data: session } = useSession()
   const [children, setChildren] = useState<Child[]>([])
   const [showAddChild, setShowAddChild] = useState(false)
+  const [recordDays, setRecordDays] = useState(0)
+  const [totalRecords, setTotalRecords] = useState(0)
 
   useEffect(() => {
     fetch('/api/children')
       .then(r => r.json())
       .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(d => { setRecordDays(d.recordDays ?? 0); setTotalRecords(d.totalRecords ?? 0) })
       .catch(console.error)
   }, [])
   const [editChild, setEditChild] = useState<ChildFormState | null>(null)
@@ -547,11 +553,11 @@ export default function SettingsPage() {
               <p className="text-orange-100 text-xs">登録中の子供</p>
             </div>
             <div className="text-center">
-              <p className="text-white font-bold text-lg">14</p>
+              <p className="text-white font-bold text-lg">{recordDays}</p>
               <p className="text-orange-100 text-xs">記録日数</p>
             </div>
             <div className="text-center">
-              <p className="text-white font-bold text-lg">52</p>
+              <p className="text-white font-bold text-lg">{totalRecords}</p>
               <p className="text-orange-100 text-xs">食事記録数</p>
             </div>
           </div>
