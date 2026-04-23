@@ -15,7 +15,7 @@ const NAV_ITEMS = [
 
 const INPUT_MENU = [
   { href: '/input/scan',           icon: Camera,       label: '食べ物をスキャン', desc: '画像認識',    color: 'bg-orange-100 text-orange-500' },
-  { href: '/input/manual',         icon: PenLine,      label: '手動で入力',       desc: '栄養素補完',  color: 'bg-blue-100 text-blue-500' },
+  { href: '/meal/new',              icon: PenLine,      label: '手動で入力',       desc: '栄養素補完',  color: 'bg-blue-100 text-blue-500' },
   { href: '/input/recipe-consult', icon: ChefHat,      label: 'レシピ相談',       desc: '栄養アドバイス', color: 'bg-green-100 text-green-600' },
   { href: '/input/recipe-suggest', icon: Refrigerator, label: 'レシピ提案',       desc: '献立提案',    color: 'bg-purple-100 text-purple-500' },
 ]
