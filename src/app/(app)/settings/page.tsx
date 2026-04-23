@@ -9,6 +9,7 @@ import {
 import { signOut, useSession } from 'next-auth/react'
 import { useTheme, type Theme } from '@/components/ThemeProvider'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 interface Child {
   id: string
@@ -460,6 +461,7 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
 
 // ---- メインページ ----
 export default function SettingsPage() {
+  const router = useRouter()
   const { theme, setTheme } = useTheme()
   const { data: session } = useSession()
   const [children, setChildren] = useState<Child[]>([])
@@ -727,6 +729,7 @@ export default function SettingsPage() {
                     const json = await res.json()
                     setChildren(json.children ?? [])
                     setEditChild(null)
+                    router.refresh()
                   } else {
                     await fetch('/api/children', {
                       method: 'POST',
