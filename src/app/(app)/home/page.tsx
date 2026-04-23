@@ -130,7 +130,7 @@ function MealCard({ mealType, foods }: { mealType: typeof MEAL_TYPES[number]; fo
         <div className="flex items-center gap-2">
           {hasFood && <span className="text-xs font-bold text-orange-500">{Math.round(totalKcal)}kcal</span>}
           <Link
-            href={`/input/manual?meal=${mealType.key}`}
+            href={`/meal/new?meal=${mealType.key}`}
             className="w-7 h-7 bg-orange-50 rounded-full flex items-center justify-center active:bg-orange-100"
           >
             <Plus className="w-4 h-4 text-orange-500" />
