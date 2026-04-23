@@ -52,6 +52,21 @@ function ChildForm({
     weight: initial?.weight ?? '',
     activity: initial?.activity ?? '普通',
   })
+
+  // initial が変わったときに form を再初期化（同一インスタンスの再利用を防ぐ補完）
+  useEffect(() => {
+    setForm({
+      name: initial?.name ?? '',
+      emoji: initial?.emoji ?? '👦',
+      birthDate: initial?.birthDate ?? '',
+      gender: initial?.gender ?? '男の子',
+      height: initial?.height ?? '',
+      weight: initial?.weight ?? '',
+      activity: initial?.activity ?? '普通',
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial?.id])
+
   const set = (k: keyof ChildFormState, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   return (
@@ -150,13 +165,15 @@ function ChildForm({
       </div>
 
       <div className="flex gap-2 pt-1">
-        <button onClick={onCancel} className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-500 font-medium">
+        <button type="button" onClick={onCancel} className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-500 font-medium">
           キャンセル
         </button>
         <button
+          type="button"
           onClick={() => {
             if (!form.name.trim()) return
-            onSave(form)
+            // form は useState の最新スナップショットを直接参照する
+            onSave({ ...form })
           }}
           className="flex-1 py-3 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-sm shadow-orange-200 active:scale-95 transition-transform"
         >
@@ -688,6 +705,7 @@ export default function SettingsPage() {
             </div>
             <div className="px-6 py-5">
               <ChildForm
+                key={editChild?.id ?? 'add'}
                 initial={editChild ?? undefined}
                 onSave={async (data) => {
                   if (editChild) {
