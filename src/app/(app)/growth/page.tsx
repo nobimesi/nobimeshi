@@ -45,12 +45,71 @@ function toChartLabel(dateStr: string) {
   return `${d.getMonth() + 1}月`
 }
 
-// 厚労省基準値（参考値・6歳男子）
-const HEIGHT_REF = { avg: 116.5, p3: 108.5, p10: 111.2, p90: 121.8, p97: 124.2 }
-const WEIGHT_REF = { avg: 20.9, p3: 16.2, p10: 17.5, p90: 24.8, p97: 27.1 }
+// 厚労省 学校保健統計調査・乳幼児身体発育調査 参考値（男女別、1〜18歳）
+// avg: 平均値(cm/kg), sd: 標準偏差（パーセンタイル計算用）
+const MHLW_HEIGHT: Record<'male' | 'female', Record<number, { avg: number; sd: number }>> = {
+  male: {
+    1: { avg: 75.8, sd: 3.0 },  2: { avg: 87.1, sd: 3.5 },  3: { avg: 95.1, sd: 3.8 },
+    4: { avg: 102.1, sd: 4.0 }, 5: { avg: 110.4, sd: 4.2 }, 6: { avg: 116.5, sd: 4.5 },
+    7: { avg: 122.5, sd: 4.8 }, 8: { avg: 128.0, sd: 5.0 }, 9: { avg: 133.5, sd: 5.2 },
+    10: { avg: 138.8, sd: 5.5 }, 11: { avg: 145.2, sd: 6.0 }, 12: { avg: 152.6, sd: 6.5 },
+    13: { avg: 160.0, sd: 7.0 }, 14: { avg: 165.1, sd: 6.5 }, 15: { avg: 168.3, sd: 6.0 },
+    16: { avg: 169.8, sd: 5.8 }, 17: { avg: 170.6, sd: 5.5 }, 18: { avg: 170.8, sd: 5.5 },
+  },
+  female: {
+    1: { avg: 74.4, sd: 3.0 },  2: { avg: 86.0, sd: 3.5 },  3: { avg: 93.9, sd: 3.8 },
+    4: { avg: 101.0, sd: 4.0 }, 5: { avg: 109.4, sd: 4.2 }, 6: { avg: 115.6, sd: 4.5 },
+    7: { avg: 121.5, sd: 4.8 }, 8: { avg: 127.3, sd: 5.0 }, 9: { avg: 133.4, sd: 5.2 },
+    10: { avg: 140.2, sd: 5.5 }, 11: { avg: 146.8, sd: 6.0 }, 12: { avg: 151.8, sd: 6.0 },
+    13: { avg: 154.8, sd: 5.5 }, 14: { avg: 156.7, sd: 5.5 }, 15: { avg: 157.3, sd: 5.3 },
+    16: { avg: 157.7, sd: 5.3 }, 17: { avg: 158.0, sd: 5.3 }, 18: { avg: 157.9, sd: 5.3 },
+  },
+}
 
-function GrowthChart({ type, data }: { type: MetricType; data: ChartPoint[] }) {
-  const ref = type === 'height' ? HEIGHT_REF : WEIGHT_REF
+const MHLW_WEIGHT: Record<'male' | 'female', Record<number, { avg: number; sd: number }>> = {
+  male: {
+    1: { avg: 9.7, sd: 1.0 },   2: { avg: 12.0, sd: 1.3 },  3: { avg: 13.9, sd: 1.5 },
+    4: { avg: 15.7, sd: 1.8 },  5: { avg: 18.9, sd: 2.5 },  6: { avg: 21.4, sd: 3.0 },
+    7: { avg: 23.9, sd: 3.5 },  8: { avg: 26.9, sd: 4.0 },  9: { avg: 30.4, sd: 5.0 },
+    10: { avg: 34.1, sd: 6.0 }, 11: { avg: 38.2, sd: 7.0 }, 12: { avg: 44.0, sd: 8.0 },
+    13: { avg: 49.7, sd: 9.0 }, 14: { avg: 54.1, sd: 9.5 }, 15: { avg: 58.2, sd: 9.5 },
+    16: { avg: 60.4, sd: 9.5 }, 17: { avg: 62.4, sd: 9.5 }, 18: { avg: 64.2, sd: 9.5 },
+  },
+  female: {
+    1: { avg: 9.1, sd: 1.0 },   2: { avg: 11.5, sd: 1.3 },  3: { avg: 13.5, sd: 1.5 },
+    4: { avg: 15.2, sd: 1.8 },  5: { avg: 18.4, sd: 2.5 },  6: { avg: 20.6, sd: 3.0 },
+    7: { avg: 23.0, sd: 3.5 },  8: { avg: 25.8, sd: 4.0 },  9: { avg: 29.1, sd: 5.0 },
+    10: { avg: 33.5, sd: 6.0 }, 11: { avg: 38.8, sd: 7.0 }, 12: { avg: 43.8, sd: 8.0 },
+    13: { avg: 47.0, sd: 8.5 }, 14: { avg: 49.6, sd: 8.5 }, 15: { avg: 51.0, sd: 8.5 },
+    16: { avg: 51.9, sd: 8.5 }, 17: { avg: 52.4, sd: 8.5 }, 18: { avg: 52.9, sd: 8.5 },
+  },
+}
+
+type RefData = { avg: number; p3: number; p10: number; p90: number; p97: number }
+
+function getRef(
+  table: typeof MHLW_HEIGHT,
+  age: number,
+  gender: string | null,
+): RefData {
+  const key: 'male' | 'female' = gender === '女の子' ? 'female' : 'male'
+  const clampedAge = Math.max(1, Math.min(18, age))
+  const entry = table[key][clampedAge]
+  if (!entry) return { avg: 0, p3: 0, p10: 0, p90: 0, p97: 0 }
+  const r = (v: number) => Math.round(v * 10) / 10
+  return {
+    avg: r(entry.avg),
+    p3:  r(entry.avg - 1.88 * entry.sd),
+    p10: r(entry.avg - 1.28 * entry.sd),
+    p90: r(entry.avg + 1.28 * entry.sd),
+    p97: r(entry.avg + 1.88 * entry.sd),
+  }
+}
+
+function GrowthChart({ type, data, age, gender }: { type: MetricType; data: ChartPoint[]; age: number; gender: string | null }) {
+  const ref: RefData = type === 'height'
+    ? getRef(MHLW_HEIGHT, age, gender)
+    : getRef(MHLW_WEIGHT, age, gender)
   const unit = type === 'height' ? 'cm' : 'kg'
   const color = type === 'height' ? '#FF6B35' : '#4CAF82'
 
@@ -131,7 +190,10 @@ function GrowthChart({ type, data }: { type: MetricType; data: ChartPoint[] }) {
   )
 }
 
-function PercentileBar({ value, refData }: { value: number; refData: typeof HEIGHT_REF }) {
+function PercentileBar({ value, type, age, gender }: { value: number; type: MetricType; age: number; gender: string | null }) {
+  const refData: RefData = type === 'height'
+    ? getRef(MHLW_HEIGHT, age, gender)
+    : getRef(MHLW_WEIGHT, age, gender)
   const range = refData.p97 - refData.p3
   const pos = Math.max(0, Math.min(100, ((value - refData.p3) / range) * 100))
   let pLabel = ''
@@ -201,6 +263,9 @@ export default function GrowthPage() {
     .map(r => ({ label: toChartLabel(r.recorded_at), value: r.weight! }))
 
   const chartData = activeMetric === 'height' ? heightData : weightData
+  const currentChild = children[selectedChild] ?? null
+  const currentAge = currentChild ? calcAge(currentChild.birth_date) : 6
+  const currentGender = currentChild?.gender ?? null
   const latestHeight = heightData[0]?.value ?? null
   const latestWeight = weightData[0]?.value ?? null
   const bmi = latestHeight && latestWeight
@@ -289,7 +354,7 @@ export default function GrowthPage() {
         <>
           {/* グラフ */}
           <div className="px-4 pb-3">
-            <GrowthChart type={activeMetric} data={chartData} />
+            <GrowthChart type={activeMetric} data={chartData} age={currentAge} gender={currentGender} />
           </div>
 
           {/* パーセンタイル */}
@@ -299,7 +364,9 @@ export default function GrowthPage() {
                 <p className="text-xs font-semibold text-gray-500 mb-3">成長曲線上の位置（参考）</p>
                 <PercentileBar
                   value={chartData[0].value}
-                  refData={activeMetric === 'height' ? HEIGHT_REF : WEIGHT_REF}
+                  type={activeMetric}
+                  age={currentAge}
+                  gender={currentGender}
                 />
               </div>
             </div>

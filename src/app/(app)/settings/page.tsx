@@ -455,6 +455,32 @@ export default function SettingsPage() {
       .catch(console.error)
   }, [])
   const [editChild, setEditChild] = useState<ChildFormState | null>(null)
+
+  const handleEditChild = async (child: Child) => {
+    let height = ''
+    let weight = ''
+    try {
+      const res = await fetch(`/api/growth-records?childId=${child.id}`)
+      const json = await res.json()
+      const latest = json.records?.[0]
+      if (latest) {
+        height = latest.height !== null ? String(latest.height) : ''
+        weight = latest.weight !== null ? String(latest.weight) : ''
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    setEditChild({
+      id: child.id,
+      name: child.name,
+      emoji: child.avatar,
+      birthDate: child.birth_date,
+      gender: child.gender ?? '',
+      height,
+      weight,
+      activity: child.activity_level ?? '普通',
+    })
+  }
   const [showContact, setShowContact] = useState(false)
   const [showNotification, setShowNotification] = useState(false)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
@@ -531,7 +557,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setEditChild({ id: child.id, name: child.name, emoji: child.avatar, birthDate: child.birth_date, gender: child.gender ?? '', height: '', weight: '', activity: child.activity_level ?? '普通' })}
+                  onClick={() => handleEditChild(child)}
                   className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center"
                 >
                   <Edit3 className="w-4 h-4 text-gray-500" />
