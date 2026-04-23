@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LineChart,
   Line,
@@ -10,17 +10,27 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  Area,
-  AreaChart,
 } from 'recharts'
-import { Plus, TrendingUp, TrendingDown, Minus, X } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, X } from 'lucide-react'
 
 type MetricType = 'height' | 'weight'
 
-const CHILDREN = [
-  { id: 1, name: 'たろう', emoji: '👦', age: 6, gender: '男の子' },
-  { id: 2, name: 'はなこ', emoji: '👧', age: 4, gender: '女の子' },
-]
+type Child = {
+  id: string
+  name: string
+  avatar: string
+  birth_date: string
+  gender: string | null
+}
+
+function calcAge(birthDate: string): number {
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
 
 const HEIGHT_DATA = [
   { month: '10月', value: 109.2 },
@@ -175,6 +185,14 @@ export default function GrowthPage() {
   const [activeMetric, setActiveMetric] = useState<MetricType>('height')
   const [selectedChild, setSelectedChild] = useState(0)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [children, setChildren] = useState<Child[]>([])
+
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
 
   const latestHeight = HEIGHT_DATA[HEIGHT_DATA.length - 1].value
   const latestWeight = WEIGHT_DATA[WEIGHT_DATA.length - 1].value
@@ -196,21 +214,25 @@ export default function GrowthPage() {
         </div>
         {/* 子供選択 */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {CHILDREN.map((c, i) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedChild(i)}
-              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                selectedChild === i
-                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200'
-              }`}
-            >
-              <span>{c.emoji}</span>
-              {c.name}
-              <span className={`text-xs ${selectedChild === i ? 'text-orange-200' : 'text-gray-400'}`}>{c.age}歳</span>
-            </button>
-          ))}
+          {children.length === 0 ? (
+            <div className="h-8 w-24 bg-gray-100 rounded-full animate-pulse" />
+          ) : (
+            children.map((c, i) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedChild(i)}
+                className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                  selectedChild === i
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200'
+                }`}
+              >
+                <span>{c.avatar}</span>
+                {c.name}
+                <span className={`text-xs ${selectedChild === i ? 'text-orange-200' : 'text-gray-400'}`}>{calcAge(c.birth_date)}歳</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

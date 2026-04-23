@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { name, birthDate, gender, height, weight, activity, emoji } = body
+  const { name, birthDate, gender, height, weight, activity, emoji, allergies, dislikedFoods } = body
 
   if (!name?.trim() || !birthDate) {
     return NextResponse.json({ error: '名前と生年月日は必須です' }, { status: 400 })
@@ -71,6 +71,25 @@ export async function POST(req: NextRequest) {
     })
     if (growthError) {
       console.error('[POST /api/children] growth_records insert error:', growthError)
+    }
+  }
+
+  // アレルギー・苦手な食べ物を food_restrictions に保存
+  const restrictionRows: { child_id: string; food_name: string; restriction_type: string; severity: string | null }[] = []
+  if (Array.isArray(allergies)) {
+    for (const name of allergies as string[]) {
+      restrictionRows.push({ child_id: child!.id, food_name: name, restriction_type: 'allergy', severity: 'mild' })
+    }
+  }
+  if (Array.isArray(dislikedFoods)) {
+    for (const name of dislikedFoods as string[]) {
+      restrictionRows.push({ child_id: child!.id, food_name: name, restriction_type: 'dislike', severity: null })
+    }
+  }
+  if (restrictionRows.length > 0) {
+    const { error: restrictionError } = await supabase.from('food_restrictions').insert(restrictionRows)
+    if (restrictionError) {
+      console.error('[POST /api/children] food_restrictions insert error:', restrictionError)
     }
   }
 

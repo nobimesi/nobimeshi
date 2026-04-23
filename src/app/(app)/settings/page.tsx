@@ -1,30 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   User, Plus, ChevronRight, MessageCircle,
   FileText, Shield, LogOut, Trash2, Edit3, X, Bell, HelpCircle,
   Sun, Moon, Monitor, Send, AlertTriangle, Check,
 } from 'lucide-react'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import { useTheme, type Theme } from '@/components/ThemeProvider'
 import Link from 'next/link'
 
 interface Child {
-  id: number
+  id: string
   name: string
-  emoji: string
-  birthDate: string
-  gender: string
-  height: string
-  weight: string
-  activity: string
+  avatar: string
+  birth_date: string
+  gender: string | null
+  activity_level: string | null
 }
-
-const INITIAL_CHILDREN: Child[] = [
-  { id: 1, name: 'たろう', emoji: '👦', birthDate: '2018-04-15', gender: '男の子', height: '113.2', weight: '19.1', activity: '普通' },
-  { id: 2, name: 'はなこ', emoji: '👧', birthDate: '2020-11-03', gender: '女の子', height: '97.5', weight: '14.2', activity: '少ない' },
-]
 
 function getAge(birthDate: string) {
   const birth = new Date(birthDate)
@@ -35,16 +28,21 @@ function getAge(birthDate: string) {
   return age
 }
 
+type ChildFormState = {
+  name: string; emoji: string; birthDate: string
+  gender: string; height: string; weight: string; activity: string
+}
+
 function ChildForm({
   initial,
   onSave,
   onCancel,
 }: {
-  initial?: Partial<Child>
-  onSave: (data: Omit<Child, 'id'>) => void
+  initial?: Partial<ChildFormState>
+  onSave: (data: ChildFormState) => void
   onCancel: () => void
 }) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ChildFormState>({
     name: initial?.name ?? '',
     emoji: initial?.emoji ?? '👦',
     birthDate: initial?.birthDate ?? '',
@@ -53,7 +51,7 @@ function ChildForm({
     weight: initial?.weight ?? '',
     activity: initial?.activity ?? '普通',
   })
-  const set = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const set = (k: keyof ChildFormState, v: string) => setForm(p => ({ ...p, [k]: v }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -445,9 +443,17 @@ function BottomSheet({ title, onClose, children }: { title: string; onClose: () 
 // ---- メインページ ----
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
-  const [children, setChildren] = useState<Child[]>(INITIAL_CHILDREN)
+  const { data: session } = useSession()
+  const [children, setChildren] = useState<Child[]>([])
   const [showAddChild, setShowAddChild] = useState(false)
-  const [editChild, setEditChild] = useState<Child | null>(null)
+
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
+  const [editChild, setEditChild] = useState<ChildFormState | null>(null)
   const [showContact, setShowContact] = useState(false)
   const [showNotification, setShowNotification] = useState(false)
   const [showDeleteAccount, setShowDeleteAccount] = useState(false)
@@ -485,8 +491,8 @@ export default function SettingsPage() {
               <User className="w-6 h-6 text-white" />
             </div>
             <div>
-              <p className="font-bold text-white">ゲストユーザー</p>
-              <p className="text-xs text-orange-100">guest@example.com</p>
+              <p className="font-bold text-white">{session?.user?.name ?? 'ユーザー'}</p>
+              <p className="text-xs text-orange-100">{session?.user?.email ?? ''}</p>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-white/20 flex gap-4">
@@ -515,16 +521,16 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-2xl">
-                    {child.emoji}
+                    {child.avatar}
                   </div>
                   <div>
                     <p className="font-semibold text-gray-800">{child.name}</p>
-                    <p className="text-xs text-gray-400">{getAge(child.birthDate)}歳 · {child.gender}</p>
-                    <p className="text-xs text-gray-400">{child.height}cm · {child.weight}kg · 運動:{child.activity}</p>
+                    <p className="text-xs text-gray-400">{getAge(child.birth_date)}歳{child.gender ? ` · ${child.gender}` : ''}</p>
+                    {child.activity_level && <p className="text-xs text-gray-400">運動: {child.activity_level}</p>}
                   </div>
                 </div>
                 <button
-                  onClick={() => setEditChild(child)}
+                  onClick={() => setEditChild({ name: child.name, emoji: child.avatar, birthDate: child.birth_date, gender: child.gender ?? '', height: '', weight: '', activity: child.activity_level ?? '普通' })}
                   className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center"
                 >
                   <Edit3 className="w-4 h-4 text-gray-500" />
@@ -656,12 +662,28 @@ export default function SettingsPage() {
             <div className="px-6 py-5">
               <ChildForm
                 initial={editChild ?? undefined}
-                onSave={(data) => {
+                onSave={async (data) => {
                   if (editChild) {
-                    setChildren(p => p.map(c => c.id === editChild.id ? { ...c, ...data } : c))
+                    // 編集はUI上のみ反映（APIは未実装）
                     setEditChild(null)
                   } else {
-                    setChildren(p => [...p, { id: Date.now(), ...data }])
+                    await fetch('/api/children', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: data.name,
+                        birthDate: data.birthDate,
+                        gender: data.gender,
+                        height: data.height,
+                        weight: data.weight,
+                        activity: data.activity,
+                        emoji: data.emoji,
+                      }),
+                    })
+                    // 子供一覧を再取得
+                    const res = await fetch('/api/children')
+                    const json = await res.json()
+                    setChildren(json.children ?? [])
                     setShowAddChild(false)
                   }
                 }}

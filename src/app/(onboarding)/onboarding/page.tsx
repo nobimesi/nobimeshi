@@ -4,7 +4,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 
-const TOTAL_STEPS = 5
+const TOTAL_STEPS = 7
+
+const ALLERGEN_OPTIONS = [
+  { name: '卵',    emoji: '🥚' },
+  { name: '乳',    emoji: '🥛' },
+  { name: '小麦',  emoji: '🌾' },
+  { name: 'えび',  emoji: '🦐' },
+  { name: 'かに',  emoji: '🦀' },
+  { name: '落花生',emoji: '🥜' },
+  { name: 'そば',  emoji: '🍜' },
+  { name: 'なし',  emoji: '✅' },
+]
 
 type Form = {
   name: string
@@ -14,6 +25,8 @@ type Form = {
   weight: string
   activity: string
   emoji: string
+  allergies: string[]
+  dislikedFoods: string[]
 }
 
 const INITIAL_FORM: Form = {
@@ -24,6 +37,8 @@ const INITIAL_FORM: Form = {
   weight: '',
   activity: '普通',
   emoji: '👦',
+  allergies: [],
+  dislikedFoods: [],
 }
 
 // ---------- ステップコンポーネント ----------
@@ -206,6 +221,105 @@ function StepActivity({ form, set }: { form: Form; set: (k: keyof Form, v: strin
   )
 }
 
+function StepAllergy({ form, setForm }: { form: Form; setForm: React.Dispatch<React.SetStateAction<Form>> }) {
+  const toggle = (name: string) => {
+    if (name === 'なし') {
+      setForm(p => ({ ...p, allergies: p.allergies.includes('なし') ? [] : ['なし'] }))
+      return
+    }
+    setForm(p => {
+      const without = p.allergies.filter(a => a !== 'なし')
+      return {
+        ...p,
+        allergies: without.includes(name)
+          ? without.filter(a => a !== name)
+          : [...without, name],
+      }
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="text-xs font-semibold text-orange-400 mb-1 tracking-widest uppercase">Step 6</p>
+        <h2 className="text-2xl font-bold text-white leading-snug">アレルギーは<br />ありますか？</h2>
+        <p className="text-sm text-slate-400 mt-2">複数選択できます。なければ「なし」を選んでください</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {ALLERGEN_OPTIONS.map(o => {
+          const selected = form.allergies.includes(o.name)
+          return (
+            <button
+              key={o.name}
+              onClick={() => toggle(o.name)}
+              className={`py-4 px-4 rounded-2xl border-2 flex items-center gap-3 transition-all ${
+                selected
+                  ? 'border-orange-400 bg-orange-500/20 scale-[1.02]'
+                  : 'border-slate-600 bg-slate-800'
+              }`}
+            >
+              <span className="text-2xl">{o.emoji}</span>
+              <span className={`text-base font-bold ${selected ? 'text-white' : 'text-slate-300'}`}>{o.name}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StepDisliked({ form, setForm }: { form: Form; setForm: React.Dispatch<React.SetStateAction<Form>> }) {
+  const [input, setInput] = useState('')
+
+  const add = () => {
+    const v = input.trim()
+    if (!v || form.dislikedFoods.includes(v)) return
+    setForm(p => ({ ...p, dislikedFoods: [...p.dislikedFoods, v] }))
+    setInput('')
+  }
+
+  const remove = (name: string) => {
+    setForm(p => ({ ...p, dislikedFoods: p.dislikedFoods.filter(f => f !== name) }))
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <p className="text-xs font-semibold text-orange-400 mb-1 tracking-widest uppercase">Step 7</p>
+        <h2 className="text-2xl font-bold text-white leading-snug">苦手な食べ物は<br />ありますか？</h2>
+        <p className="text-sm text-slate-400 mt-2">任意です。後から変更できます</p>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder="例：なす、ピーマン"
+          className="flex-1 bg-slate-800 border border-slate-600 rounded-2xl px-4 py-3.5 text-white text-base placeholder-slate-500 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+        />
+        <button
+          onClick={add}
+          disabled={!input.trim()}
+          className="px-4 py-3.5 bg-orange-500 text-white rounded-2xl font-bold disabled:opacity-40"
+        >
+          追加
+        </button>
+      </div>
+      {form.dislikedFoods.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {form.dislikedFoods.map(f => (
+            <div key={f} className="flex items-center gap-1.5 bg-slate-700 rounded-full px-3 py-1.5">
+              <span className="text-white text-sm">😣 {f}</span>
+              <button onClick={() => remove(f)} className="text-slate-400 hover:text-white ml-0.5">×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------- メインページ ----------
 
 export default function OnboardingPage() {
@@ -219,6 +333,7 @@ export default function OnboardingPage() {
   const [form, setForm] = useState<Form>(INITIAL_FORM)
 
   const set = (k: keyof Form, v: string) => setForm(p => ({ ...p, [k]: v }))
+
 
   const canNext = () => {
     if (step === 1) return form.name.trim().length > 0
@@ -268,6 +383,8 @@ export default function OnboardingPage() {
         weight: form.weight,
         activity: form.activity,
         emoji: form.emoji,
+        allergies: form.allergies.filter(a => a !== 'なし'),
+        dislikedFoods: form.dislikedFoods,
       }),
     })
 
@@ -327,6 +444,8 @@ export default function OnboardingPage() {
         {step === 3 && <StepGender form={form} set={set} />}
         {step === 4 && <StepBody form={form} set={set} />}
         {step === 5 && <StepActivity form={form} set={set} />}
+        {step === 6 && <StepAllergy form={form} setForm={setForm} />}
+        {step === 7 && <StepDisliked form={form} setForm={setForm} />}
       </div>
 
       {/* エラー */}
@@ -355,7 +474,7 @@ export default function OnboardingPage() {
       </button>
 
       {/* ステップ3以降はスキップ可 */}
-      {(step === 3 || step === 4) && (
+      {(step === 3 || step === 4 || step === 6 || step === 7) && (
         <button
           onClick={handleNext}
           className="w-full py-3 text-slate-500 text-sm mt-2"

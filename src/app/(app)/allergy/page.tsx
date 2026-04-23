@@ -1,22 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, Star, AlertTriangle, ShieldCheck } from 'lucide-react'
 
-interface AllergyItem {
-  id: number
+type Child = {
+  id: string
   name: string
-  severity: 'mild' | 'moderate' | 'severe'
-  emoji: string
+  avatar: string
 }
 
-interface DislikedFood {
-  id: number
-  name: string
-  emoji: string
-  overcame: boolean
-  stampsNeeded: number
-  stampsGot: number
+type Restriction = {
+  id: string
+  food_name: string
+  restriction_type: 'allergy' | 'dislike'
+  severity: 'mild' | 'moderate' | 'severe' | null
+  overcome_count: number
 }
 
 const SEVERITY_CONFIG = {
@@ -38,44 +36,77 @@ const COMMON_ALLERGENS = [
   { name: '魚', emoji: '🐟' },
 ]
 
-const CHILDREN = [
-  { id: 1, name: 'たろう', emoji: '👦' },
-  { id: 2, name: 'はなこ', emoji: '👧' },
-]
+const STAMPS_NEEDED = 5
 
 export default function AllergyPage() {
   const [activeTab, setActiveTab] = useState<'allergy' | 'disliked'>('allergy')
   const [selectedChild, setSelectedChild] = useState(0)
-
-  const [allergies, setAllergies] = useState<AllergyItem[]>([
-    { id: 1, name: 'えび', severity: 'severe', emoji: '🦐' },
-    { id: 2, name: 'かに', severity: 'severe', emoji: '🦀' },
-    { id: 3, name: '小麦', severity: 'moderate', emoji: '🌾' },
-  ])
-
-  const [dislikedFoods, setDislikedFoods] = useState<DislikedFood[]>([
-    { id: 1, name: 'なす', emoji: '🍆', overcame: false, stampsNeeded: 5, stampsGot: 2 },
-    { id: 2, name: 'ピーマン', emoji: '🫑', overcame: true, stampsNeeded: 5, stampsGot: 5 },
-    { id: 3, name: 'きのこ', emoji: '🍄', overcame: false, stampsNeeded: 5, stampsGot: 0 },
-    { id: 4, name: 'にんじん', emoji: '🥕', overcame: false, stampsNeeded: 5, stampsGot: 3 },
-  ])
+  const [children, setChildren] = useState<Child[]>([])
+  const [restrictions, setRestrictions] = useState<Restriction[]>([])
+  const [loadingRestrictions, setLoadingRestrictions] = useState(false)
 
   const [showAddAllergy, setShowAddAllergy] = useState(false)
   const [showAddDisliked, setShowAddDisliked] = useState(false)
   const [newAllergyName, setNewAllergyName] = useState('')
-  const [newAllergyEmoji, setNewAllergyEmoji] = useState('🚫')
   const [newAllergySeverity, setNewAllergySeverity] = useState<'mild' | 'moderate' | 'severe'>('mild')
   const [newDislikedName, setNewDislikedName] = useState('')
 
-  const addStamp = (id: number) => {
-    setDislikedFoods(prev => prev.map(f => {
-      if (f.id !== id || f.overcame) return f
-      const next = f.stampsGot + 1
-      return { ...f, stampsGot: next, overcame: next >= f.stampsNeeded }
-    }))
+  // 子供一覧を取得
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
+
+  // 選択した子供の food_restrictions を取得
+  useEffect(() => {
+    const child = children[selectedChild]
+    if (!child) return
+    setLoadingRestrictions(true)
+    fetch(`/api/food-restrictions?childId=${child.id}`)
+      .then(r => r.json())
+      .then(d => setRestrictions(d.restrictions ?? []))
+      .catch(console.error)
+      .finally(() => setLoadingRestrictions(false))
+  }, [children, selectedChild])
+
+  const currentChild = children[selectedChild]
+  const allergies = restrictions.filter(r => r.restriction_type === 'allergy')
+  const dislikedFoods = restrictions.filter(r => r.restriction_type === 'dislike')
+  const severeCount = allergies.filter(a => a.severity === 'severe').length
+
+  const addRestriction = async (foodName: string, type: 'allergy' | 'dislike', severity?: 'mild' | 'moderate' | 'severe') => {
+    if (!currentChild) return
+    const res = await fetch('/api/food-restrictions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ childId: currentChild.id, foodName, type, severity }),
+    })
+    const data = await res.json()
+    if (data.restriction) {
+      setRestrictions(p => [...p, data.restriction])
+    }
   }
 
-  const severeCount = allergies.filter(a => a.severity === 'severe').length
+  const removeRestriction = async (id: string) => {
+    await fetch(`/api/food-restrictions?id=${id}`, { method: 'DELETE' })
+    setRestrictions(p => p.filter(r => r.id !== id))
+  }
+
+  const addStamp = async (id: string) => {
+    const res = await fetch('/api/food-restrictions', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    const data = await res.json()
+    setRestrictions(p => p.map(r => {
+      if (r.id !== id) return r
+      const newCount = data.overcome_count ?? r.overcome_count + 1
+      return { ...r, overcome_count: newCount }
+    }))
+  }
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -87,20 +118,24 @@ export default function AllergyPage() {
         </div>
         {/* 子供選択 */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {CHILDREN.map((c, i) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedChild(i)}
-              className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                selectedChild === i
-                  ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                  : 'bg-white text-gray-600 border-gray-200'
-              }`}
-            >
-              <span>{c.emoji}</span>
-              {c.name}
-            </button>
-          ))}
+          {children.length === 0 ? (
+            <div className="h-8 w-24 bg-gray-100 rounded-full animate-pulse" />
+          ) : (
+            children.map((c, i) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedChild(i)}
+                className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                  selectedChild === i
+                    ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200'
+                }`}
+              >
+                <span>{c.avatar}</span>
+                {c.name}
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -126,10 +161,15 @@ export default function AllergyPage() {
         </div>
       </div>
 
+      {loadingRestrictions && (
+        <div className="px-4 py-2 flex flex-col gap-2">
+          {[0, 1].map(i => <div key={i} className="h-16 bg-gray-100 rounded-2xl animate-pulse" />)}
+        </div>
+      )}
+
       {/* アレルギータブ */}
-      {activeTab === 'allergy' && (
+      {!loadingRestrictions && activeTab === 'allergy' && (
         <div className="px-4 pb-6">
-          {/* 警告バナー */}
           {severeCount > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-start gap-3 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -140,25 +180,24 @@ export default function AllergyPage() {
             </div>
           )}
 
-          {/* アレルギーリスト */}
           <div className="flex flex-col gap-2.5 mb-3">
             {allergies.map((a) => {
-              const cfg = SEVERITY_CONFIG[a.severity]
+              const cfg = SEVERITY_CONFIG[a.severity ?? 'mild']
               return (
                 <div key={a.id} className={`bg-white border ${cfg.border} rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-sm`}>
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 ${cfg.bgColor} rounded-xl flex items-center justify-center text-xl`}>
-                      {a.emoji}
+                      {COMMON_ALLERGENS.find(c => c.name === a.food_name)?.emoji ?? '🚫'}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">{a.name}</p>
+                      <p className="text-sm font-semibold text-gray-800">{a.food_name}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.badgeBg} ${cfg.textColor} font-medium`}>
                         {cfg.label}アレルギー
                       </span>
                     </div>
                   </div>
                   <button
-                    onClick={() => setAllergies(p => p.filter(x => x.id !== a.id))}
+                    onClick={() => removeRestriction(a.id)}
                     className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center"
                   >
                     <X className="w-3.5 h-3.5 text-gray-400" />
@@ -172,10 +211,10 @@ export default function AllergyPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-4 mb-3 shadow-sm">
             <p className="text-xs font-semibold text-gray-500 mb-3">よくあるアレルゲン</p>
             <div className="flex flex-wrap gap-2">
-              {COMMON_ALLERGENS.filter(a => !allergies.find(al => al.name === a.name)).map((item) => (
+              {COMMON_ALLERGENS.filter(a => !allergies.find(al => al.food_name === a.name)).map((item) => (
                 <button
                   key={item.name}
-                  onClick={() => setAllergies(p => [...p, { id: Date.now(), name: item.name, severity: 'mild', emoji: item.emoji }])}
+                  onClick={() => addRestriction(item.name, 'allergy', 'mild')}
                   className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 text-gray-600 text-xs px-3 py-2 rounded-full hover:bg-orange-50 hover:border-orange-200 hover:text-orange-600 transition-colors"
                 >
                   <span>{item.emoji}</span>+ {item.name}
@@ -216,9 +255,9 @@ export default function AllergyPage() {
                   キャンセル
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newAllergyName.trim()) return
-                    setAllergies(p => [...p, { id: Date.now(), name: newAllergyName.trim(), severity: newAllergySeverity, emoji: '🚫' }])
+                    await addRestriction(newAllergyName.trim(), 'allergy', newAllergySeverity)
                     setNewAllergyName('')
                     setShowAddAllergy(false)
                   }}
@@ -241,80 +280,82 @@ export default function AllergyPage() {
       )}
 
       {/* 苦手タブ */}
-      {activeTab === 'disliked' && (
+      {!loadingRestrictions && activeTab === 'disliked' && (
         <div className="px-4 pb-6">
           <div className="bg-orange-50 border border-orange-100 rounded-2xl p-3.5 flex items-start gap-3 mb-3">
             <span className="text-xl shrink-0">🌟</span>
             <p className="text-xs text-orange-700 leading-relaxed">
-              食べられたら「できた！」をタップしてスタンプを集めよう！5個集めると克服達成です🎉
+              食べられたら「できた！」をタップしてスタンプを集めよう！{STAMPS_NEEDED}個集めると克服達成です🎉
             </p>
           </div>
 
           <div className="flex flex-col gap-3 mb-3">
-            {dislikedFoods.map(food => (
-              <div
-                key={food.id}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
-                  food.overcame ? 'border-green-200' : 'border-gray-100'
-                }`}
-              >
-                <div className={`flex items-center justify-between px-4 py-3 ${food.overcame ? 'bg-green-50' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
-                      food.overcame ? 'bg-green-100' : 'bg-gray-100'
-                    }`}>
-                      {food.emoji}
+            {dislikedFoods.map(food => {
+              const overcame = food.overcome_count >= STAMPS_NEEDED
+              return (
+                <div
+                  key={food.id}
+                  className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+                    overcame ? 'border-green-200' : 'border-gray-100'
+                  }`}
+                >
+                  <div className={`flex items-center justify-between px-4 py-3 ${overcame ? 'bg-green-50' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${
+                        overcame ? 'bg-green-100' : 'bg-gray-100'
+                      }`}>
+                        😣
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold ${overcame ? 'text-green-700' : 'text-gray-800'}`}>
+                          {food.food_name}
+                        </p>
+                        {overcame ? (
+                          <div className="flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-green-500" />
+                            <span className="text-xs text-green-500 font-medium">克服済み！</span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">{food.overcome_count}/{STAMPS_NEEDED} スタンプ</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className={`text-sm font-semibold ${food.overcame ? 'text-green-700' : 'text-gray-800'}`}>
-                        {food.name}
-                      </p>
-                      {food.overcame ? (
-                        <div className="flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3 text-green-500" />
-                          <span className="text-xs text-green-500 font-medium">克服済み！</span>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400">{food.stampsGot}/{food.stampsNeeded} スタンプ</p>
+                    <div className="flex items-center gap-2">
+                      {!overcame && (
+                        <button
+                          onClick={() => addStamp(food.id)}
+                          className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs px-3 py-1.5 rounded-full border border-yellow-200 hover:bg-yellow-200 active:scale-95 transition-all font-medium"
+                        >
+                          <Star className="w-3.5 h-3.5" />
+                          できた！
+                        </button>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!food.overcame && (
                       <button
-                        onClick={() => addStamp(food.id)}
-                        className="flex items-center gap-1 bg-yellow-100 text-yellow-700 text-xs px-3 py-1.5 rounded-full border border-yellow-200 hover:bg-yellow-200 active:scale-95 transition-all font-medium"
+                        onClick={() => removeRestriction(food.id)}
+                        className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center"
                       >
-                        <Star className="w-3.5 h-3.5" />
-                        できた！
+                        <X className="w-3.5 h-3.5 text-gray-400" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => setDislikedFoods(p => p.filter(f => f.id !== food.id))}
-                      className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center"
-                    >
-                      <X className="w-3.5 h-3.5 text-gray-400" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* スタンプ進捗バー */}
-                {!food.overcame && (
-                  <div className="px-4 pb-3 pt-1">
-                    <div className="flex gap-1.5">
-                      {Array.from({ length: food.stampsNeeded }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 h-2 rounded-full transition-all duration-300 ${
-                            i < food.stampsGot ? 'bg-yellow-400' : 'bg-gray-100'
-                          }`}
-                        />
-                      ))}
                     </div>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {!overcame && (
+                    <div className="px-4 pb-3 pt-1">
+                      <div className="flex gap-1.5">
+                        {Array.from({ length: STAMPS_NEEDED }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`flex-1 h-2 rounded-full transition-all duration-300 ${
+                              i < food.overcome_count ? 'bg-yellow-400' : 'bg-gray-100'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {showAddDisliked ? (
@@ -332,9 +373,9 @@ export default function AllergyPage() {
                   キャンセル
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!newDislikedName.trim()) return
-                    setDislikedFoods(p => [...p, { id: Date.now(), name: newDislikedName.trim(), emoji: '😣', overcame: false, stampsNeeded: 5, stampsGot: 0 }])
+                    await addRestriction(newDislikedName.trim(), 'dislike')
                     setNewDislikedName('')
                     setShowAddDisliked(false)
                   }}
