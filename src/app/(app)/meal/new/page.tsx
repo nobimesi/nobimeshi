@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ChevronLeft, Search, PenLine, Camera, X, Check, Loader2, Upload, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, Search, PenLine, Camera, X, Check, Loader2, Upload, Plus, Trash2, Sparkles } from 'lucide-react'
 
 // ---- 日本食品標準成分表ベース ----
 type Food = {
@@ -408,11 +408,50 @@ function calcNutrients(food: Food, qty: number, unit: Unit) {
 }
 
 // ---- 検索タブ ----
-function SearchTab({ onSelect }: { onSelect: (f: NutrientForm) => void }) {
+function SearchTab({
+  onSelect,
+  onAiResult,
+}: {
+  onSelect: (f: NutrientForm) => void
+  onAiResult: (f: NutrientForm) => void
+}) {
   const [query, setQuery] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
+
   const results = query.trim().length >= 1
     ? FOOD_DB.filter(f => matchesQuery(f, query))
     : FOOD_DB.slice(0, 20)
+
+  const noResults = query.trim().length >= 1 && results.length === 0
+
+  const handleAiSearch = async () => {
+    if (!query.trim() || aiLoading) return
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const res = await fetch('/api/food-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foodName: query.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
+      const r = data.result
+      // 手入力タブのフォームに渡して確認・編集できるようにする
+      onAiResult({
+        foodName: r.foodName ?? query.trim(),
+        calories: r.calories != null ? String(r.calories) : '',
+        protein:  r.protein  != null ? String(r.protein)  : '',
+        carbs:    r.carbs    != null ? String(r.carbs)    : '',
+        fat:      r.fat      != null ? String(r.fat)      : '',
+      })
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'エラーが発生しました')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -422,19 +461,36 @@ function SearchTab({ onSelect }: { onSelect: (f: NutrientForm) => void }) {
           type="text"
           placeholder="食品名を入力（例: ごはん、卵）"
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { setQuery(e.target.value); setAiError('') }}
           className="w-full pl-9 pr-9 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
         {query && (
-          <button type="button" onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+          <button type="button" onClick={() => { setQuery(''); setAiError('') }} className="absolute right-3 top-1/2 -translate-y-1/2">
             <X className="w-4 h-4 text-gray-400" />
           </button>
         )}
       </div>
       <p className="text-xs text-gray-500">{query ? `「${query}」 ${results.length}件` : '人気の食品'}</p>
       <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
-        {results.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-6">見つかりませんでした</p>
+        {noResults ? (
+          <div className="flex flex-col items-center gap-3 py-6">
+            <p className="text-sm text-gray-500">見つかりませんでした</p>
+            <button
+              type="button"
+              onClick={handleAiSearch}
+              disabled={aiLoading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-orange-900/30 disabled:opacity-60 active:scale-95 transition-all"
+            >
+              {aiLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" />AIで調べています...</>
+                : <><Sparkles className="w-4 h-4" />✨ AIで栄養素を調べる</>
+              }
+            </button>
+            {aiError && (
+              <p className="text-xs text-red-400 text-center">{aiError}</p>
+            )}
+            <p className="text-xs text-gray-600 text-center">※ AIによる推定値です。手入力タブで確認できます</p>
+          </div>
         ) : results.map((food, i) => (
           <button
             type="button"
@@ -1001,7 +1057,7 @@ function MealNewInner() {
             ))}
           </div>
 
-          {activeTab === 'search' && <SearchTab onSelect={handleSearchSelect} />}
+          {activeTab === 'search' && <SearchTab onSelect={handleSearchSelect} onAiResult={handleAiResult} />}
           {activeTab === 'manual' && (
             <ManualTab
               key={aiResult ? JSON.stringify(aiResult) : 'manual'}
