@@ -2,14 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, TrendingUp, Plus, AlertCircle, Settings, Camera, PenLine, ChefHat, Refrigerator, X } from 'lucide-react'
+import { Home, TrendingUp, Plus, AlertCircle, Settings, Camera, PenLine, ChefHat, Refrigerator, X, BookOpen } from 'lucide-react'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/home',     icon: Home,          label: 'ホーム' },
   { href: '/growth',   icon: TrendingUp,    label: '成長' },
   { href: '/input',    icon: null,          label: '入力' },
-  { href: '/allergy',  icon: AlertCircle,   label: 'アレルギー' },
+  { href: '/history',  icon: BookOpen,      label: '履歴' },
   { href: '/settings', icon: Settings,      label: '設定' },
 ]
 
