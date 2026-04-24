@@ -1,8 +1,23 @@
 'use client'
 
-import { useState } from 'react'
-import { ArrowLeft, Loader2, Plus, X, Refrigerator } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, Loader2, Plus, X, Refrigerator, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+
+interface Child {
+  id: string
+  name: string
+  avatar: string
+  birth_date: string
+  gender: string | null
+  activity_level: string | null
+}
+
+interface Restriction {
+  id: string
+  food_name: string
+  restriction_type: string
+}
 
 interface Recipe {
   name: string
@@ -12,11 +27,49 @@ interface Recipe {
   cookTime: string
 }
 
+function getAge(birthDate: string) {
+  const birth = new Date(birthDate)
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
+  return age
+}
+
 export default function RecipeSuggestPage() {
+  const [children, setChildren] = useState<Child[]>([])
+  const [childIndex, setChildIndex] = useState(0)
+  const [allergies, setAllergies] = useState<string[]>([])
   const [ingredients, setIngredients] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [recipes, setRecipes] = useState<Recipe[] | null>(null)
+
+  // 子供一覧を取得
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
+
+  // 子供が変わったらアレルギー情報を取得
+  useEffect(() => {
+    const child = children[childIndex]
+    if (!child) return
+    setAllergies([])
+    fetch(`/api/food-restrictions?childId=${child.id}`)
+      .then(r => r.json())
+      .then((d: { restrictions?: Restriction[] }) => {
+        const items = (d.restrictions ?? [])
+          .filter(r => r.restriction_type === 'allergy')
+          .map(r => r.food_name)
+        setAllergies(items)
+      })
+      .catch(console.error)
+  }, [children, childIndex])
+
+  const child = children[childIndex]
 
   const addIngredient = () => {
     const trimmed = input.trim()
@@ -32,6 +85,21 @@ export default function RecipeSuggestPage() {
   const handleSuggest = async () => {
     if (ingredients.length === 0) return
     setLoading(true)
+
+    // アレルギー情報を含むプロンプト（AI API実装時に使用）
+    const _prompt = [
+      `冷蔵庫の食材: ${ingredients.join('・')}`,
+      child
+        ? `対象: ${child.name}（${getAge(child.birth_date)}歳・${child.gender ?? ''}・活動量: ${child.activity_level ?? '普通'}）`
+        : '',
+      allergies.length > 0
+        ? `アレルギー（レシピに絶対使わないこと）: ${allergies.join('・')}`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    // TODO: POST /api/recipe-suggest にプロンプトを送信する
     await new Promise((r) => setTimeout(r, 1500))
     setRecipes([
       {
@@ -69,13 +137,49 @@ export default function RecipeSuggestPage() {
         <h1 className="text-lg font-bold text-gray-800">レシピ提案</h1>
       </div>
 
-      <div className="px-4 flex flex-col gap-4">
+      <div className="px-4 flex flex-col gap-4 pb-24">
         <div className="bg-orange-50 rounded-2xl p-4 flex items-start gap-3">
           <Refrigerator className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
           <p className="text-sm text-gray-600 leading-relaxed">
             冷蔵庫にある食材を入力してください。子供の年齢・栄養バランスを考慮したレシピを提案します。アレルギー食材は自動的に除外します。
           </p>
         </div>
+
+        {/* 対象の子供 */}
+        {children.length > 0 && (
+          <div className="bg-white border border-gray-100 rounded-xl p-3">
+            <p className="text-xs font-semibold text-gray-500 mb-2">対象の子供</p>
+            {children.length > 1 && (
+              <div className="flex gap-2 mb-2 overflow-x-auto">
+                {children.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setChildIndex(i)}
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      childIndex === i
+                        ? 'bg-orange-500 text-white border-orange-500'
+                        : 'bg-gray-50 text-gray-500 border-gray-200'
+                    }`}
+                  >
+                    <span>{c.avatar}</span>{c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {child && (
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{child.avatar}</span>
+                <p className="text-sm font-medium text-gray-700">
+                  {child.name}
+                  <span className="text-xs text-gray-400 ml-1">
+                    {getAge(child.birth_date)}歳{child.gender ? `・${child.gender}` : ''}
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 食材入力 */}
         <div>
@@ -113,13 +217,15 @@ export default function RecipeSuggestPage() {
         )}
 
         {/* アレルギー表示 */}
-        <div className="bg-red-50 rounded-xl p-3 flex items-start gap-2">
-          <span className="text-red-500 text-sm">⚠️</span>
-          <div>
-            <p className="text-xs font-semibold text-red-600 mb-0.5">登録済みアレルギー食材（自動除外）</p>
-            <p className="text-xs text-red-500">えび・かに・小麦</p>
+        {allergies.length > 0 && (
+          <div className="bg-red-50 rounded-xl p-3 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold text-red-600 mb-0.5">登録済みアレルギー食材（自動除外）</p>
+              <p className="text-xs text-red-500">{allergies.join('・')}</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <button
           onClick={handleSuggest}
@@ -138,7 +244,7 @@ export default function RecipeSuggestPage() {
 
         {/* レシピ一覧 */}
         {recipes && (
-          <div className="flex flex-col gap-4 pb-6">
+          <div className="flex flex-col gap-4">
             <p className="text-sm font-semibold text-gray-700">おすすめレシピ</p>
             {recipes.map((recipe, i) => (
               <div key={i} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
