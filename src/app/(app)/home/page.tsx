@@ -23,6 +23,64 @@ type MealRecord = {
   carbs: number | null
   notes: string | null
   recorded_at: string
+  // ビタミン
+  vitamin_a?: number | null; vitamin_d?: number | null; vitamin_e?: number | null; vitamin_k?: number | null
+  vitamin_b1?: number | null; vitamin_b2?: number | null; vitamin_b6?: number | null; vitamin_b12?: number | null
+  vitamin_c?: number | null; niacin?: number | null; pantothenic_acid?: number | null
+  folate?: number | null; biotin?: number | null
+  // ミネラル
+  calcium?: number | null; phosphorus?: number | null; potassium?: number | null
+  sulfur?: number | null; chlorine?: number | null; sodium?: number | null
+  magnesium?: number | null; iron?: number | null; zinc?: number | null
+  copper?: number | null; manganese?: number | null; iodine?: number | null
+  selenium?: number | null; molybdenum?: number | null; chromium?: number | null; cobalt?: number | null
+}
+
+// ビタミン13種のDRI（6〜7歳男性基準、日本人食事摂取基準2020年版）
+const VITAMIN_DRI: { key: keyof MealRecord; dri: number }[] = [
+  { key: 'vitamin_a',        dri: 400  },
+  { key: 'vitamin_d',        dri: 3    },
+  { key: 'vitamin_e',        dri: 5    },
+  { key: 'vitamin_k',        dri: 90   },
+  { key: 'vitamin_b1',       dri: 0.8  },
+  { key: 'vitamin_b2',       dri: 0.9  },
+  { key: 'vitamin_b6',       dri: 0.8  },
+  { key: 'vitamin_b12',      dri: 1.3  },
+  { key: 'vitamin_c',        dri: 60   },
+  { key: 'niacin',           dri: 9    },
+  { key: 'pantothenic_acid', dri: 4    },
+  { key: 'folate',           dri: 140  },
+  { key: 'biotin',           dri: 30   },
+]
+
+// ミネラル16種のDRI（同上）
+const MINERAL_DRI: { key: keyof MealRecord; dri: number }[] = [
+  { key: 'calcium',    dri: 600  },
+  { key: 'phosphorus', dri: 500  },
+  { key: 'potassium',  dri: 1300 },
+  { key: 'sulfur',     dri: 700  },
+  { key: 'chlorine',   dri: 2000 },
+  { key: 'sodium',     dri: 800  },
+  { key: 'magnesium',  dri: 130  },
+  { key: 'iron',       dri: 5.5  },
+  { key: 'zinc',       dri: 5    },
+  { key: 'copper',     dri: 0.4  },
+  { key: 'manganese',  dri: 2.0  },
+  { key: 'iodine',     dri: 90   },
+  { key: 'selenium',   dri: 20   },
+  { key: 'molybdenum', dri: 15   },
+  { key: 'chromium',   dri: 10   },
+  { key: 'cobalt',     dri: 0.1  },
+]
+
+/** ビタミンまたはミネラルの平均DRI達成率（0〜100）を返す */
+function calcMicroScore(records: MealRecord[], driList: { key: keyof MealRecord; dri: number }[]): number {
+  let score = 0
+  for (const { key, dri } of driList) {
+    const total = records.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+    score += Math.min(total / dri, 1)
+  }
+  return Math.round((score / driList.length) * 100)
 }
 
 function calcAge(birthDate: string): number {
@@ -203,6 +261,10 @@ export default function HomePage() {
   const targetKcal = NUTRIENT_TARGETS[0].max
   const kcalPct = Math.min(Math.round((totals.calories / targetKcal) * 100), 100)
 
+  // ビタミン・ミネラルの平均DRI達成率（%）
+  const vitaminScore = calcMicroScore(mealRecords, VITAMIN_DRI)
+  const mineralScore = calcMicroScore(mealRecords, MINERAL_DRI)
+
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
       {/* ヘッダー */}
@@ -289,13 +351,28 @@ export default function HomePage() {
 
           {loadingMeals ? (
             <div className="flex flex-col gap-2.5">
-              {[0, 1, 2, 3].map(i => <div key={i} className="h-4 bg-gray-100 rounded-full animate-pulse" />)}
+              {[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="h-4 bg-gray-100 rounded-full animate-pulse" />)}
             </div>
           ) : (
             <div className="flex flex-col gap-2.5">
               {NUTRIENT_TARGETS.map(n => (
                 <NutritionBar key={n.key} label={n.label} unit={n.unit} bg={n.bg} value={totals[n.key]} max={n.max} />
               ))}
+              <div className="h-px bg-gray-100 my-0.5" />
+              <NutritionBar
+                label="ビタミン"
+                unit="%(DRI)"
+                bg="bg-green-400"
+                value={vitaminScore}
+                max={100}
+              />
+              <NutritionBar
+                label="ミネラル"
+                unit="%(DRI)"
+                bg="bg-teal-400"
+                value={mineralScore}
+                max={100}
+              />
             </div>
           )}
         </div>
