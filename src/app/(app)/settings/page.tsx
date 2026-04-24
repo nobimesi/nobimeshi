@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import {
   User, Plus, ChevronRight, MessageCircle,
   FileText, Shield, LogOut, Trash2, Edit3, X, Bell, HelpCircle,
-  Sun, Moon, Monitor, Send, AlertTriangle, Check,
+  Sun, Moon, Monitor, Send, AlertTriangle, Check, AlertCircle,
 } from 'lucide-react'
 import { signOut, useSession } from 'next-auth/react'
 import { useTheme, type Theme } from '@/components/ThemeProvider'
@@ -33,7 +33,10 @@ type ChildFormState = {
   id?: string
   name: string; emoji: string; birthDate: string
   gender: string; height: string; weight: string; activity: string
+  allergies: string[]; otherAllergy: string
 }
+
+const COMMON_ALLERGENS = ['卵', '乳製品', '小麦', 'そば', '落花生', 'えび', 'かに', '魚介類', 'ナッツ類', '大豆']
 
 function ChildForm({
   initial,
@@ -52,6 +55,8 @@ function ChildForm({
     height: initial?.height ?? '',
     weight: initial?.weight ?? '',
     activity: initial?.activity ?? '普通',
+    allergies: initial?.allergies ?? [],
+    otherAllergy: initial?.otherAllergy ?? '',
   })
 
   // initial が変わったときに form を再初期化（同一インスタンスの再利用を防ぐ補完）
@@ -64,11 +69,18 @@ function ChildForm({
       height: initial?.height ?? '',
       weight: initial?.weight ?? '',
       activity: initial?.activity ?? '普通',
+      allergies: initial?.allergies ?? [],
+      otherAllergy: initial?.otherAllergy ?? '',
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id])
 
   const set = (k: keyof ChildFormState, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const toggleAllergen = (a: string) =>
+    setForm(p => ({
+      ...p,
+      allergies: p.allergies.includes(a) ? p.allergies.filter(x => x !== a) : [...p.allergies, a],
+    }))
 
   return (
     <div className="flex flex-col gap-4">
@@ -163,6 +175,38 @@ function ChildForm({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* アレルギー */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-2">
+          <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+          <label className="text-xs font-medium text-gray-500">アレルギー</label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {COMMON_ALLERGENS.map(a => {
+            const checked = form.allergies.includes(a)
+            return (
+              <button
+                key={a}
+                type="button"
+                onClick={() => toggleAllergen(a)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  checked ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'
+                }`}
+              >
+                {a}
+              </button>
+            )
+          })}
+        </div>
+        <input
+          type="text"
+          placeholder="その他（例: キウイ）"
+          value={form.otherAllergy}
+          onChange={e => set('otherAllergy', e.target.value)}
+          className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+        />
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -484,14 +528,25 @@ export default function SettingsPage() {
   const handleEditChild = async (child: Child) => {
     let height = ''
     let weight = ''
+    let allergies: string[] = []
+    let otherAllergy = ''
     try {
-      const res = await fetch(`/api/growth-records?childId=${child.id}`)
-      const json = await res.json()
-      const latest = json.records?.[0]
+      const [growthRes, restrictionRes] = await Promise.all([
+        fetch(`/api/growth-records?childId=${child.id}`),
+        fetch(`/api/food-restrictions?childId=${child.id}`),
+      ])
+      const growthJson = await growthRes.json()
+      const latest = growthJson.records?.[0]
       if (latest) {
         height = latest.height !== null ? String(latest.height) : ''
         weight = latest.weight !== null ? String(latest.weight) : ''
       }
+      const restrictionJson = await restrictionRes.json()
+      const allergyItems: string[] = (restrictionJson.restrictions ?? [])
+        .filter((r: { restriction_type: string; food_name: string }) => r.restriction_type === 'allergy')
+        .map((r: { food_name: string }) => r.food_name)
+      allergies = allergyItems.filter(a => COMMON_ALLERGENS.includes(a))
+      otherAllergy = allergyItems.filter(a => !COMMON_ALLERGENS.includes(a)).join('、')
     } catch (e) {
       console.error(e)
     }
@@ -504,6 +559,8 @@ export default function SettingsPage() {
       height,
       weight,
       activity: child.activity_level ?? '普通',
+      allergies,
+      otherAllergy,
     })
   }
   const [showContact, setShowContact] = useState(false)
@@ -716,6 +773,34 @@ export default function SettingsPage() {
                 key={editChild?.id ?? 'add'}
                 initial={editChild ?? undefined}
                 onSave={async (data) => {
+                  // アレルギーを food_restrictions へ保存する共通処理
+                  const saveAllergies = async (childId: string) => {
+                    // 既存アレルギーを取得して全削除
+                    const existing = await fetch(`/api/food-restrictions?childId=${childId}`).then(r => r.json())
+                    const toDelete = (existing.restrictions ?? []).filter(
+                      (r: { restriction_type: string; id: string }) => r.restriction_type === 'allergy'
+                    )
+                    await Promise.all(
+                      toDelete.map((r: { id: string }) =>
+                        fetch(`/api/food-restrictions?id=${r.id}`, { method: 'DELETE' })
+                      )
+                    )
+                    // 新しいアレルギーを登録
+                    const newAllergies = [
+                      ...data.allergies,
+                      ...data.otherAllergy.split(/[、,，\s]+/).map(s => s.trim()).filter(Boolean),
+                    ]
+                    await Promise.all(
+                      newAllergies.map(foodName =>
+                        fetch('/api/food-restrictions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ childId, foodName, type: 'allergy', severity: 'moderate' }),
+                        })
+                      )
+                    )
+                  }
+
                   if (editChild) {
                     await fetch('/api/children', {
                       method: 'PATCH',
@@ -731,12 +816,17 @@ export default function SettingsPage() {
                         weight: data.weight,
                       }),
                     })
+                    await saveAllergies(editChild.id!)
                     const res = await fetch('/api/children')
                     const json = await res.json()
                     setChildren(json.children ?? [])
                     setEditChild(null)
                     router.refresh()
                   } else {
+                    const allAllergyItems = [
+                      ...data.allergies,
+                      ...data.otherAllergy.split(/[、,，\s]+/).map((s: string) => s.trim()).filter(Boolean),
+                    ]
                     await fetch('/api/children', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -748,12 +838,13 @@ export default function SettingsPage() {
                         weight: data.weight,
                         activity: data.activity,
                         emoji: data.emoji,
+                        allergies: allAllergyItems,
                       }),
                     })
                     // 子供一覧を再取得
-                    const res = await fetch('/api/children')
-                    const json = await res.json()
-                    setChildren(json.children ?? [])
+                    const listRes = await fetch('/api/children')
+                    const listJson = await listRes.json()
+                    setChildren(listJson.children ?? [])
                     setShowAddChild(false)
                   }
                 }}
