@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'rea
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, Search, PenLine, Camera, X, Check, Loader2, Upload, Plus, Trash2 } from 'lucide-react'
 
-// ---- 日本食品標準成分表ベース（よく使う食品 50 品目） ----
+// ---- 日本食品標準成分表ベース ----
 type Food = {
   name: string
   calories: number
@@ -13,64 +13,93 @@ type Food = {
   fat: number
   portion: string   // 例: "150g", "200ml", "1個"
   category: string
+  aliases?: string[] // 別名・表記ゆれ・料理名
+}
+
+// 食品名・aliases いずれかにクエリが含まれるか
+function matchesQuery(food: Food, q: string): boolean {
+  if (food.name.includes(q)) return true
+  return food.aliases?.some(a => a.includes(q)) ?? false
 }
 
 const FOOD_DB: Food[] = [
   // 主食
-  { name: 'ごはん（茶碗1杯）',     calories: 252, protein: 3.8,  carbs: 55.7, fat: 0.5,  portion: '150g',  category: '主食' },
-  { name: 'パン（食パン1枚）',      calories: 158, protein: 5.6,  carbs: 28.0, fat: 2.6,  portion: '60g',   category: '主食' },
-  { name: 'うどん（1玉）',          calories: 231, protein: 6.1,  carbs: 47.5, fat: 0.8,  portion: '200g',  category: '主食' },
-  { name: 'ラーメン（1杯）',        calories: 472, protein: 18.0, carbs: 68.0, fat: 14.0, portion: '500g',  category: '主食' },
-  { name: 'そば（1玉）',            calories: 268, protein: 12.0, carbs: 51.7, fat: 1.8,  portion: '200g',  category: '主食' },
-  { name: 'パスタ（1人前）',        calories: 374, protein: 13.2, carbs: 73.1, fat: 1.8,  portion: '200g',  category: '主食' },
-  { name: 'おにぎり（1個）',        calories: 176, protein: 2.8,  carbs: 38.5, fat: 0.3,  portion: '100g',  category: '主食' },
-  { name: 'コーンフレーク（1食）',  calories: 143, protein: 3.0,  carbs: 32.0, fat: 0.6,  portion: '40g',   category: '主食' },
-  // 主菜
-  { name: '卵（1個）',              calories: 76,  protein: 6.2,  carbs: 0.2,  fat: 5.1,  portion: '60g',   category: '主菜' },
-  { name: '鶏むね肉（100g）',       calories: 108, protein: 22.3, carbs: 0.0,  fat: 1.5,  portion: '100g',  category: '主菜' },
-  { name: '鶏もも肉（100g）',       calories: 190, protein: 17.3, carbs: 0.0,  fat: 13.0, portion: '100g',  category: '主菜' },
-  { name: '豚バラ肉（100g）',       calories: 386, protein: 13.4, carbs: 0.1,  fat: 34.0, portion: '100g',  category: '主菜' },
-  { name: '牛もも肉（100g）',       calories: 182, protein: 21.2, carbs: 0.3,  fat: 9.6,  portion: '100g',  category: '主菜' },
-  { name: 'サーモン（1切れ）',      calories: 133, protein: 20.5, carbs: 0.1,  fat: 4.1,  portion: '80g',   category: '主菜' },
-  { name: 'さば（1切れ）',          calories: 202, protein: 17.0, carbs: 0.0,  fat: 13.5, portion: '100g',  category: '主菜' },
-  { name: 'まぐろ刺身（5切れ）',    calories: 108, protein: 23.5, carbs: 0.0,  fat: 1.4,  portion: '80g',   category: '主菜' },
-  { name: 'えび（5尾）',            calories: 60,  protein: 13.6, carbs: 0.1,  fat: 0.3,  portion: '70g',   category: '主菜' },
-  { name: '豆腐（半丁）',           calories: 72,  protein: 6.5,  carbs: 1.5,  fat: 4.1,  portion: '150g',  category: '主菜' },
-  { name: '納豆（1パック）',        calories: 100, protein: 8.3,  carbs: 5.4,  fat: 5.4,  portion: '50g',   category: '主菜' },
-  { name: 'ウインナー（3本）',      calories: 191, protein: 6.5,  carbs: 3.1,  fat: 16.8, portion: '60g',   category: '主菜' },
-  // 副菜
-  { name: 'にんじん（中1本）',      calories: 30,  protein: 0.7,  carbs: 6.8,  fat: 0.1,  portion: '100g',  category: '副菜' },
-  { name: 'ほうれん草（1束）',      calories: 20,  protein: 2.2,  carbs: 3.1,  fat: 0.4,  portion: '100g',  category: '副菜' },
-  { name: 'ブロッコリー（1/2房）',  calories: 37,  protein: 4.3,  carbs: 5.2,  fat: 0.5,  portion: '100g',  category: '副菜' },
-  { name: 'トマト（中1個）',        calories: 19,  protein: 0.7,  carbs: 3.9,  fat: 0.1,  portion: '100g',  category: '副菜' },
-  { name: 'きゅうり（1本）',        calories: 13,  protein: 1.0,  carbs: 2.4,  fat: 0.1,  portion: '100g',  category: '副菜' },
-  { name: 'キャベツ（1/8個）',      calories: 23,  protein: 1.3,  carbs: 5.2,  fat: 0.2,  portion: '100g',  category: '副菜' },
-  { name: 'じゃがいも（中1個）',    calories: 84,  protein: 1.6,  carbs: 19.7, fat: 0.1,  portion: '100g',  category: '副菜' },
-  { name: 'たまねぎ（中1/2個）',    calories: 33,  protein: 1.0,  carbs: 7.6,  fat: 0.1,  portion: '100g',  category: '副菜' },
-  { name: 'えだまめ（50g）',        calories: 68,  protein: 5.8,  carbs: 4.5,  fat: 3.0,  portion: '50g',   category: '副菜' },
-  { name: 'コーン缶（1/2缶）',      calories: 77,  protein: 2.9,  carbs: 15.9, fat: 1.2,  portion: '80g',   category: '副菜' },
+  { name: 'ごはん（茶碗1杯）',     calories: 252, protein: 3.8,  carbs: 55.7, fat: 0.5,  portion: '150g',  category: '主食',  aliases: ['ご飯', '白米', 'お米', 'rice', '米', '飯'] },
+  { name: 'パン（食パン1枚）',      calories: 158, protein: 5.6,  carbs: 28.0, fat: 2.6,  portion: '60g',   category: '主食',  aliases: ['食パン', '白パン', 'bread', 'トースト', 'トースト'] },
+  { name: 'うどん（1玉）',          calories: 231, protein: 6.1,  carbs: 47.5, fat: 0.8,  portion: '200g',  category: '主食',  aliases: ['うどん麺', 'かけうどん', 'ざるうどん'] },
+  { name: 'ラーメン（1杯）',        calories: 472, protein: 18.0, carbs: 68.0, fat: 14.0, portion: '500g',  category: '主食',  aliases: ['らーめん', '中華そば', 'ramen', '拉麺'] },
+  { name: 'そば（1玉）',            calories: 268, protein: 12.0, carbs: 51.7, fat: 1.8,  portion: '200g',  category: '主食',  aliases: ['蕎麦', '日本そば', 'ざるそば', 'もりそば'] },
+  { name: 'パスタ（1人前）',        calories: 374, protein: 13.2, carbs: 73.1, fat: 1.8,  portion: '200g',  category: '主食',  aliases: ['スパゲッティ', 'スパゲティ', 'スパゲッティー', 'スパゲティー', 'pasta', 'ペンネ', 'フェットチーネ', 'スパ'] },
+  { name: 'おにぎり（1個）',        calories: 176, protein: 2.8,  carbs: 38.5, fat: 0.3,  portion: '100g',  category: '主食',  aliases: ['おむすび', '握り飯', 'にぎりめし'] },
+  { name: 'コーンフレーク（1食）',  calories: 143, protein: 3.0,  carbs: 32.0, fat: 0.6,  portion: '40g',   category: '主食',  aliases: ['シリアル', 'グラノーラ', 'コーンフレークス'] },
+  { name: 'チャーハン（1皿）',      calories: 550, protein: 14.0, carbs: 78.0, fat: 18.0, portion: '280g',  category: '主食',  aliases: ['炒飯', 'やきめし', '焼き飯', 'fried rice'] },
+  { name: 'カレーライス（1皿）',    calories: 650, protein: 17.0, carbs:105.0, fat: 15.0, portion: '500g',  category: '主食',  aliases: ['カレー', 'カレーごはん', 'curry', 'カレーご飯'] },
+  // 卵料理
+  { name: '目玉焼き（1個）',        calories: 96,  protein: 6.2,  carbs: 0.3,  fat: 7.5,  portion: '65g',   category: '主菜',  aliases: ['目玉焼', 'めだまやき', 'めだま焼き', 'フライドエッグ', '卵料理'] },
+  { name: '卵焼き（1人前）',        calories: 185, protein: 12.5, carbs: 4.0,  fat: 12.8, portion: '130g',  category: '主菜',  aliases: ['玉子焼き', '玉子焼', 'だし巻き', 'だし巻き卵', 'だし巻', 'たまごやき'] },
+  { name: 'スクランブルエッグ（1人前）', calories: 165, protein: 11.5, carbs: 1.5, fat: 12.5, portion: '110g', category: '主菜', aliases: ['いり卵', '炒り卵', 'scrambled egg'] },
+  { name: 'オムレツ（1人前）',      calories: 200, protein: 13.0, carbs: 2.5,  fat: 15.5, portion: '120g',  category: '主菜',  aliases: ['omelet', 'オムライス卵', 'たまごオムレツ'] },
+  { name: '卵（1個）',              calories: 76,  protein: 6.2,  carbs: 0.2,  fat: 5.1,  portion: '60g',   category: '主菜',  aliases: ['たまご', 'タマゴ', 'egg', '生卵', '鶏卵'] },
+  // 肉料理
+  { name: '唐揚げ（3個）',          calories: 285, protein: 20.5, carbs: 11.5, fat: 16.5, portion: '150g',  category: '主菜',  aliases: ['から揚げ', 'からあげ', '鶏の唐揚げ', '鶏唐揚げ', 'チキン唐揚', 'karaage'] },
+  { name: 'ハンバーグ（1個）',      calories: 295, protein: 18.5, carbs: 12.0, fat: 18.5, portion: '150g',  category: '主菜',  aliases: ['はんばーぐ', 'ハンバーク', 'hamburger steak', 'デミハンバーグ'] },
+  { name: '餃子（5個）',            calories: 280, protein: 14.5, carbs: 28.0, fat: 12.0, portion: '150g',  category: '主菜',  aliases: ['ぎょうざ', 'ギョーザ', 'gyoza', '焼き餃子', '水餃子'] },
+  { name: '鶏むね肉（100g）',       calories: 108, protein: 22.3, carbs: 0.0,  fat: 1.5,  portion: '100g',  category: '主菜',  aliases: ['鶏胸肉', 'とりむね', 'チキン', 'とり肉', '鶏肉'] },
+  { name: '鶏もも肉（100g）',       calories: 190, protein: 17.3, carbs: 0.0,  fat: 13.0, portion: '100g',  category: '主菜',  aliases: ['鶏腿肉', 'とりもも', 'チキンもも', 'もも肉'] },
+  { name: '豚バラ肉（100g）',       calories: 386, protein: 13.4, carbs: 0.1,  fat: 34.0, portion: '100g',  category: '主菜',  aliases: ['豚バラ', 'ばら肉', '豚肉', 'ぶた肉'] },
+  { name: '牛もも肉（100g）',       calories: 182, protein: 21.2, carbs: 0.3,  fat: 9.6,  portion: '100g',  category: '主菜',  aliases: ['牛肉', 'ビーフ', 'beef', 'うし肉'] },
+  { name: 'ウインナー（3本）',      calories: 191, protein: 6.5,  carbs: 3.1,  fat: 16.8, portion: '60g',   category: '主菜',  aliases: ['ウィンナー', 'ソーセージ', 'フランクフルト', 'wiener', 'sausage'] },
+  // 魚料理
+  { name: 'サーモン（1切れ）',      calories: 133, protein: 20.5, carbs: 0.1,  fat: 4.1,  portion: '80g',   category: '主菜',  aliases: ['鮭', 'さけ', 'サケ', 'salmon', '塩鮭', '焼き鮭'] },
+  { name: 'さば（1切れ）',          calories: 202, protein: 17.0, carbs: 0.0,  fat: 13.5, portion: '100g',  category: '主菜',  aliases: ['鯖', 'サバ', 'サバ缶', 'さば缶', '味噌煮', 'さば味噌'] },
+  { name: 'まぐろ刺身（5切れ）',    calories: 108, protein: 23.5, carbs: 0.0,  fat: 1.4,  portion: '80g',   category: '主菜',  aliases: ['鮪', 'マグロ', 'tuna', '刺身', 'お刺身', 'マグロの刺身'] },
+  { name: 'えび（5尾）',            calories: 60,  protein: 13.6, carbs: 0.1,  fat: 0.3,  portion: '70g',   category: '主菜',  aliases: ['エビ', '海老', '蝦', 'shrimp', 'プリプリエビ'] },
+  // 豆腐・大豆
+  { name: '豆腐（半丁）',           calories: 72,  protein: 6.5,  carbs: 1.5,  fat: 4.1,  portion: '150g',  category: '主菜',  aliases: ['とうふ', 'トウフ', 'tofu', '絹豆腐', '木綿豆腐'] },
+  { name: '納豆（1パック）',        calories: 100, protein: 8.3,  carbs: 5.4,  fat: 5.4,  portion: '50g',   category: '主菜',  aliases: ['なっとう', 'ナットウ', 'natto', '糸引き納豆'] },
+  // 副菜・野菜
+  { name: 'にんじん（中1本）',      calories: 30,  protein: 0.7,  carbs: 6.8,  fat: 0.1,  portion: '100g',  category: '副菜',  aliases: ['人参', 'ニンジン', 'carrot'] },
+  { name: 'ほうれん草（1束）',      calories: 20,  protein: 2.2,  carbs: 3.1,  fat: 0.4,  portion: '100g',  category: '副菜',  aliases: ['ほうれんそう', 'ホウレン草', 'spinach', 'おひたし'] },
+  { name: 'ブロッコリー（1/2房）',  calories: 37,  protein: 4.3,  carbs: 5.2,  fat: 0.5,  portion: '100g',  category: '副菜',  aliases: ['ブロッコリ', 'broccoli'] },
+  { name: 'トマト（中1個）',        calories: 19,  protein: 0.7,  carbs: 3.9,  fat: 0.1,  portion: '100g',  category: '副菜',  aliases: ['tomato', 'ミニトマト', 'プチトマト'] },
+  { name: 'きゅうり（1本）',        calories: 13,  protein: 1.0,  carbs: 2.4,  fat: 0.1,  portion: '100g',  category: '副菜',  aliases: ['胡瓜', 'キュウリ', 'cucumber'] },
+  { name: 'キャベツ（1/8個）',      calories: 23,  protein: 1.3,  carbs: 5.2,  fat: 0.2,  portion: '100g',  category: '副菜',  aliases: ['cabbage', 'キャベツ炒め', '千切りキャベツ'] },
+  { name: 'じゃがいも（中1個）',    calories: 84,  protein: 1.6,  carbs: 19.7, fat: 0.1,  portion: '100g',  category: '副菜',  aliases: ['馬鈴薯', 'ポテト', 'potato', 'いも'] },
+  { name: 'たまねぎ（中1/2個）',    calories: 33,  protein: 1.0,  carbs: 7.6,  fat: 0.1,  portion: '100g',  category: '副菜',  aliases: ['玉葱', '玉ねぎ', 'onion'] },
+  { name: 'えだまめ（50g）',        calories: 68,  protein: 5.8,  carbs: 4.5,  fat: 3.0,  portion: '50g',   category: '副菜',  aliases: ['枝豆', 'エダマメ', 'edamame'] },
+  { name: 'コーン缶（1/2缶）',      calories: 77,  protein: 2.9,  carbs: 15.9, fat: 1.2,  portion: '80g',   category: '副菜',  aliases: ['とうもろこし', 'コーン', 'corn', 'スイートコーン'] },
+  { name: '野菜サラダ（1人前）',    calories: 45,  protein: 1.5,  carbs: 7.5,  fat: 1.5,  portion: '150g',  category: '副菜',  aliases: ['サラダ', 'グリーンサラダ', 'salad', 'レタスサラダ', '生野菜'] },
+  { name: 'ポテトサラダ（1人前）',  calories: 190, protein: 3.5,  carbs: 18.0, fat: 11.0, portion: '120g',  category: '副菜',  aliases: ['ポテサラ'] },
+  // 汁物
+  { name: '味噌汁（1杯）',          calories: 31,  protein: 2.1,  carbs: 3.1,  fat: 1.0,  portion: '180ml', category: 'その他', aliases: ['みそ汁', 'お味噌汁', 'おみそしる', 'みそしる', 'お味噌', '豆腐の味噌汁'] },
+  { name: 'コーンスープ（1杯）',    calories: 130, protein: 3.5,  carbs: 16.0, fat: 5.5,  portion: '200ml', category: 'その他', aliases: ['コーンポタージュ', 'ポタージュ', 'corn soup'] },
+  { name: 'シチュー（1皿）',        calories: 280, protein: 15.0, carbs: 25.0, fat: 12.0, portion: '250g',  category: '主菜',  aliases: ['クリームシチュー', 'ビーフシチュー', 'stew', 'シチュウ'] },
   // 乳製品
-  { name: '牛乳（1杯）',            calories: 122, protein: 6.6,  carbs: 9.6,  fat: 6.9,  portion: '200ml', category: '乳製品' },
-  { name: 'ヨーグルト（1個）',      calories: 65,  protein: 3.4,  carbs: 7.9,  fat: 2.0,  portion: '100g',  category: '乳製品' },
-  { name: 'チーズ（スライス1枚）',  calories: 68,  protein: 4.1,  carbs: 0.4,  fat: 5.2,  portion: '20g',   category: '乳製品' },
-  { name: 'バター（1かけ）',        calories: 74,  protein: 0.1,  carbs: 0.0,  fat: 8.2,  portion: '10g',   category: '乳製品' },
+  { name: '牛乳（1杯）',            calories: 122, protein: 6.6,  carbs: 9.6,  fat: 6.9,  portion: '200ml', category: '乳製品', aliases: ['ミルク', 'milk', '生乳', 'ぎゅうにゅう', '低脂肪乳'] },
+  { name: 'ヨーグルト（1個）',      calories: 65,  protein: 3.4,  carbs: 7.9,  fat: 2.0,  portion: '100g',  category: '乳製品', aliases: ['ヨーグルト', 'yogurt', 'プレーンヨーグルト', 'よーぐると'] },
+  { name: 'チーズ（スライス1枚）',  calories: 68,  protein: 4.1,  carbs: 0.4,  fat: 5.2,  portion: '20g',   category: '乳製品', aliases: ['cheese', 'スライスチーズ', 'とろけるチーズ', 'プロセスチーズ', 'チーダー'] },
+  { name: 'バター（1かけ）',        calories: 74,  protein: 0.1,  carbs: 0.0,  fat: 8.2,  portion: '10g',   category: '乳製品', aliases: ['butter', 'マーガリン'] },
   // 果物
-  { name: 'バナナ（1本）',          calories: 93,  protein: 1.1,  carbs: 22.5, fat: 0.2,  portion: '100g',  category: '果物' },
-  { name: 'りんご（1/2個）',        calories: 56,  protein: 0.2,  carbs: 15.5, fat: 0.2,  portion: '100g',  category: '果物' },
-  { name: 'みかん（1個）',          calories: 45,  protein: 0.7,  carbs: 11.1, fat: 0.1,  portion: '100g',  category: '果物' },
-  { name: 'いちご（5粒）',          calories: 34,  protein: 0.9,  carbs: 8.5,  fat: 0.1,  portion: '100g',  category: '果物' },
-  { name: 'ぶどう（1房）',          calories: 69,  protein: 0.4,  carbs: 17.1, fat: 0.1,  portion: '100g',  category: '果物' },
+  { name: 'バナナ（1本）',          calories: 93,  protein: 1.1,  carbs: 22.5, fat: 0.2,  portion: '100g',  category: '果物',  aliases: ['ばなな', 'banana', '完熟バナナ'] },
+  { name: 'りんご（1/2個）',        calories: 56,  protein: 0.2,  carbs: 15.5, fat: 0.2,  portion: '100g',  category: '果物',  aliases: ['リンゴ', 'アップル', 'apple', '林檎', 'ふじ'] },
+  { name: 'みかん（1個）',          calories: 45,  protein: 0.7,  carbs: 11.1, fat: 0.1,  portion: '100g',  category: '果物',  aliases: ['ミカン', 'オレンジ', 'みかん', 'マンダリン', '温州みかん', '柑橘'] },
+  { name: 'いちご（5粒）',          calories: 34,  protein: 0.9,  carbs: 8.5,  fat: 0.1,  portion: '100g',  category: '果物',  aliases: ['イチゴ', '苺', 'strawberry', 'ストロベリー'] },
+  { name: 'ぶどう（1房）',          calories: 69,  protein: 0.4,  carbs: 17.1, fat: 0.1,  portion: '100g',  category: '果物',  aliases: ['ブドウ', '葡萄', 'grape', 'グレープ', 'マスカット'] },
+  { name: 'もも（1個）',            calories: 43,  protein: 0.6,  carbs: 10.2, fat: 0.1,  portion: '100g',  category: '果物',  aliases: ['桃', 'モモ', 'peach', 'ピーチ'] },
+  { name: 'すいか（1切れ）',        calories: 37,  protein: 0.6,  carbs: 9.2,  fat: 0.1,  portion: '200g',  category: '果物',  aliases: ['スイカ', '西瓜', 'watermelon'] },
+  { name: 'キウイ（1個）',          calories: 53,  protein: 1.0,  carbs: 13.5, fat: 0.1,  portion: '100g',  category: '果物',  aliases: ['キウイフルーツ', 'kiwi', 'kiwifruit'] },
   // おやつ
-  { name: 'せんべい（3枚）',        calories: 112, protein: 2.3,  carbs: 24.0, fat: 0.5,  portion: '30g',   category: 'おやつ' },
-  { name: 'チョコレート（1かけ）',  calories: 151, protein: 1.9,  carbs: 17.1, fat: 8.6,  portion: '25g',   category: 'おやつ' },
-  { name: 'ポテトチップス（1袋）',  calories: 356, protein: 3.7,  carbs: 33.0, fat: 22.0, portion: '60g',   category: 'おやつ' },
-  { name: 'アイスクリーム（1個）',  calories: 180, protein: 3.6,  carbs: 22.4, fat: 8.0,  portion: '100g',  category: 'おやつ' },
-  { name: 'プリン（1個）',          calories: 116, protein: 4.5,  carbs: 15.9, fat: 4.5,  portion: '100g',  category: 'おやつ' },
-  { name: 'ジュース（1杯）',        calories: 46,  protein: 0.2,  carbs: 11.4, fat: 0.0,  portion: '100ml', category: 'おやつ' },
+  { name: 'せんべい（3枚）',        calories: 112, protein: 2.3,  carbs: 24.0, fat: 0.5,  portion: '30g',   category: 'おやつ', aliases: ['煎餅', 'お煎餅', 'おせんべい', 'rice cracker'] },
+  { name: 'チョコレート（1かけ）',  calories: 151, protein: 1.9,  carbs: 17.1, fat: 8.6,  portion: '25g',   category: 'おやつ', aliases: ['チョコ', 'chocolate', 'ミルクチョコ', 'チョコレート菓子'] },
+  { name: 'ポテトチップス（1袋）',  calories: 356, protein: 3.7,  carbs: 33.0, fat: 22.0, portion: '60g',   category: 'おやつ', aliases: ['ポテチ', 'potato chips', 'スナック'] },
+  { name: 'アイスクリーム（1個）',  calories: 180, protein: 3.6,  carbs: 22.4, fat: 8.0,  portion: '100g',  category: 'おやつ', aliases: ['アイス', 'ice cream', 'ソフトクリーム', 'ジェラート', 'アイスバー'] },
+  { name: 'プリン（1個）',          calories: 116, protein: 4.5,  carbs: 15.9, fat: 4.5,  portion: '100g',  category: 'おやつ', aliases: ['プリン', 'pudding', 'カスタードプリン', 'ゼリー'] },
+  { name: 'ジュース（1杯）',        calories: 46,  protein: 0.2,  carbs: 11.4, fat: 0.0,  portion: '100ml', category: 'おやつ', aliases: ['果汁', 'フルーツジュース', 'juice', 'オレンジジュース', 'リンゴジュース'] },
+  { name: 'クッキー（3枚）',        calories: 156, protein: 2.0,  carbs: 20.5, fat: 7.5,  portion: '30g',   category: 'おやつ', aliases: ['ビスケット', 'cookie', 'クッキー菓子'] },
   // その他
-  { name: '味噌汁（1杯）',          calories: 31,  protein: 2.1,  carbs: 3.1,  fat: 1.0,  portion: '180ml', category: 'その他' },
-  { name: 'ツナ缶（1缶）',          calories: 97,  protein: 15.7, carbs: 0.3,  fat: 2.5,  portion: '70g',   category: 'その他' },
-  { name: 'マヨネーズ（大さじ1）',  calories: 84,  protein: 0.3,  carbs: 0.4,  fat: 9.1,  portion: '12g',   category: 'その他' },
+  { name: 'ツナ缶（1缶）',          calories: 97,  protein: 15.7, carbs: 0.3,  fat: 2.5,  portion: '70g',   category: 'その他', aliases: ['ツナ', 'tuna can', 'シーチキン', 'ツナ缶詰'] },
+  { name: 'マヨネーズ（大さじ1）',  calories: 84,  protein: 0.3,  carbs: 0.4,  fat: 9.1,  portion: '12g',   category: 'その他', aliases: ['マヨ', 'mayo', 'mayonnaise'] },
+  { name: 'ケチャップ（大さじ1）',  calories: 18,  protein: 0.4,  carbs: 4.2,  fat: 0.0,  portion: '15g',   category: 'その他', aliases: ['トマトケチャップ', 'ketchup'] },
 ]
 
 const MEAL_TYPES = [
@@ -118,7 +147,7 @@ function calcNutrients(food: Food, qty: number, unit: Unit) {
 function SearchTab({ onSelect }: { onSelect: (f: NutrientForm) => void }) {
   const [query, setQuery] = useState('')
   const results = query.trim().length >= 1
-    ? FOOD_DB.filter(f => f.name.includes(query))
+    ? FOOD_DB.filter(f => matchesQuery(f, query))
     : FOOD_DB.slice(0, 20)
 
   return (
@@ -214,7 +243,7 @@ function ManualTab({
 
   const dbResults = useMemo(
     () => foodQuery.trim().length >= 1
-      ? FOOD_DB.filter(f => f.name.includes(foodQuery)).slice(0, 7)
+      ? FOOD_DB.filter(f => matchesQuery(f, foodQuery)).slice(0, 7)
       : [],
     [foodQuery],
   )
