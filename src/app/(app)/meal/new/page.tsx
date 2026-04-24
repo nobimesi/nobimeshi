@@ -14,6 +14,37 @@ type Food = {
   portion: string   // 例: "150g", "200ml", "1個"
   category: string
   aliases?: string[] // 別名・表記ゆれ・料理名
+  // ビタミン (per portion)
+  vitamin_a?: number        // μg RAE
+  vitamin_d?: number        // μg
+  vitamin_e?: number        // mg α-TE
+  vitamin_k?: number        // μg
+  vitamin_b1?: number       // mg
+  vitamin_b2?: number       // mg
+  vitamin_b6?: number       // mg
+  vitamin_b12?: number      // μg
+  vitamin_c?: number        // mg
+  niacin?: number           // mg NE
+  pantothenic_acid?: number // mg
+  folate?: number           // μg
+  biotin?: number           // μg
+  // ミネラル (per portion)
+  calcium?: number    // mg
+  phosphorus?: number // mg
+  potassium?: number  // mg
+  sulfur?: number     // mg
+  chlorine?: number   // mg
+  sodium?: number     // mg
+  magnesium?: number  // mg
+  iron?: number       // mg
+  zinc?: number       // mg
+  copper?: number     // mg
+  manganese?: number  // mg
+  iodine?: number     // μg
+  selenium?: number   // μg
+  molybdenum?: number // μg
+  chromium?: number   // μg
+  cobalt?: number     // μg
 }
 
 // 食品名・aliases いずれかにクエリが含まれるか
@@ -366,6 +397,46 @@ const FOOD_DB: Food[] = [
   { name: 'タコス（2個）',              calories: 340, protein: 16.0, carbs: 36.0, fat: 14.0, portion: '160g',  category: '主食', aliases: ['tacos', 'メキシカン', 'ブリトー'] },
 ]
 
+// ---- 主要食品のビタミン・ミネラルデータ（日本食品標準成分表2020年版ベース） ----
+// キー = FOOD_DB の name と一致させること
+const FOOD_MICRO_DATA: Record<string, Partial<Food>> = {
+  'ごはん（茶碗1杯）':     { vitamin_b1: 0.03, vitamin_b2: 0.02, niacin: 0.6,  folate: 12,   phosphorus: 51,  potassium: 44,  magnesium: 11,  iron: 0.2,  zinc: 0.9 },
+  '玄米ごはん（茶碗1杯）': { vitamin_b1: 0.16, vitamin_b2: 0.02, niacin: 3.0,  folate: 18,   phosphorus: 200, potassium: 95,  magnesium: 74,  iron: 0.6,  zinc: 1.2, manganese: 2.1 },
+  '食パン（1枚）':         { vitamin_b1: 0.07, vitamin_b2: 0.04, niacin: 1.1,  folate: 17,   calcium: 17, phosphorus: 68, potassium: 60,  sodium: 264, magnesium: 14, iron: 0.4, zinc: 0.5 },
+  '卵（1個・生）':          { vitamin_a: 90, vitamin_d: 1.1, vitamin_e: 0.6, vitamin_k: 12, vitamin_b1: 0.04, vitamin_b2: 0.22, vitamin_b6: 0.05, vitamin_b12: 0.9, folate: 24, biotin: 15, calcium: 23, phosphorus: 99, potassium: 65, magnesium: 5, iron: 0.9, zinc: 0.8 },
+  '目玉焼き（1個）':        { vitamin_a: 90, vitamin_d: 1.0, vitamin_e: 1.0, vitamin_b2: 0.22, vitamin_b12: 0.8, calcium: 23, phosphorus: 99, iron: 0.9, zinc: 0.8 },
+  '卵焼き（1人前）':        { vitamin_a: 140, vitamin_b2: 0.30, vitamin_b12: 1.2, calcium: 35, phosphorus: 150, iron: 1.4, zinc: 1.2 },
+  'ゆで卵（1個）':          { vitamin_a: 90, vitamin_d: 1.1, vitamin_e: 0.6, vitamin_b2: 0.22, vitamin_b12: 0.9, calcium: 23, phosphorus: 99, iron: 0.9, zinc: 0.8 },
+  '牛乳（1杯）':            { vitamin_a: 38, vitamin_d: 0.3, vitamin_b2: 0.30, vitamin_b12: 0.6, calcium: 220, phosphorus: 186, potassium: 300, magnesium: 20, iodine: 30, selenium: 4 },
+  'ヨーグルト（1個）':      { vitamin_b2: 0.14, vitamin_b12: 0.4, calcium: 120, phosphorus: 90, potassium: 170, magnesium: 12, iodine: 20 },
+  'チーズ（スライス1枚）':  { vitamin_a: 12, vitamin_d: 0.1, vitamin_b2: 0.06, vitamin_b12: 0.4, calcium: 126, phosphorus: 94, sodium: 200, zinc: 0.6 },
+  'ほうれん草（1束）':      { vitamin_a: 350, vitamin_k: 270, vitamin_c: 35, vitamin_b1: 0.11, vitamin_b2: 0.20, folate: 210, calcium: 49, potassium: 690, magnesium: 69, iron: 2.0, zinc: 0.7, manganese: 0.8 },
+  'ほうれん草のお浸し（1人前）': { vitamin_a: 350, vitamin_k: 270, vitamin_c: 20, folate: 170, calcium: 49, potassium: 690, iron: 2.0 },
+  'ブロッコリー（1/2房）':  { vitamin_c: 120, vitamin_k: 150, vitamin_a: 12, folate: 120, calcium: 38, potassium: 360, iron: 1.0, zinc: 0.5, selenium: 2 },
+  'にんじん（中1本）':      { vitamin_a: 720, vitamin_k: 23, vitamin_c: 6, vitamin_b6: 0.12, folate: 21, calcium: 28, potassium: 300, magnesium: 10, iron: 0.2 },
+  'じゃがいも（中1個）':    { vitamin_c: 28, vitamin_b1: 0.09, vitamin_b6: 0.19, folate: 20, potassium: 420, calcium: 3, iron: 0.4 },
+  'さつまいも（中1/2本）':  { vitamin_c: 29, vitamin_e: 1.5, vitamin_b6: 0.25, folate: 49, calcium: 36, potassium: 480, iron: 0.6 },
+  '鮭の塩焼き（1切れ）':    { vitamin_d: 23.2, vitamin_e: 1.9, vitamin_b1: 0.18, vitamin_b2: 0.16, vitamin_b12: 3.6, niacin: 10.4, calcium: 11, phosphorus: 223, potassium: 312, magnesium: 27, iron: 0.4, zinc: 0.5, selenium: 24 },
+  'サーモン刺身（5切れ）':  { vitamin_d: 11.0, vitamin_e: 2.5, vitamin_b12: 3.1, niacin: 7.3, calcium: 7, phosphorus: 186, potassium: 264, selenium: 17 },
+  'まぐろ刺身（5切れ）':    { vitamin_d: 4.0, vitamin_b6: 0.64, vitamin_b12: 4.0, niacin: 14.2, phosphorus: 270, potassium: 380, selenium: 27 },
+  '鶏むね肉（100g）':       { vitamin_b6: 0.64, vitamin_b12: 0.2, niacin: 11.6, phosphorus: 210, potassium: 340, magnesium: 30, iron: 0.4, zinc: 0.8, selenium: 27 },
+  '鶏もも肉（100g）':       { vitamin_b6: 0.29, vitamin_b12: 0.2, niacin: 5.5, calcium: 6, phosphorus: 160, potassium: 260, iron: 0.7, zinc: 1.6 },
+  '豆腐（半丁）':           { vitamin_e: 0.3, vitamin_b1: 0.12, folate: 18, calcium: 120, phosphorus: 126, potassium: 201, magnesium: 48, iron: 0.8, zinc: 0.8 },
+  '納豆（1パック）':        { vitamin_k: 300, vitamin_e: 1.6, vitamin_b1: 0.04, vitamin_b2: 0.14, folate: 54, biotin: 7, calcium: 45, phosphorus: 95, potassium: 330, magnesium: 50, iron: 1.7, zinc: 1.0, manganese: 0.5 },
+  'バナナ（1本）':           { vitamin_b6: 0.34, vitamin_c: 16, folate: 26, potassium: 360, magnesium: 32, iron: 0.3, manganese: 0.3 },
+  'りんご（1/2個）':         { vitamin_c: 6, potassium: 120, iron: 0.1 },
+  'みかん（1個）':           { vitamin_c: 32, folate: 22, potassium: 130, calcium: 17 },
+  'いちご（1パック）':       { vitamin_c: 84, folate: 90, potassium: 260, calcium: 23, iron: 0.6 },
+  '枝豆（50g）':             { vitamin_b1: 0.15, vitamin_b2: 0.07, vitamin_c: 15, folate: 160, calcium: 65, potassium: 260, magnesium: 32, iron: 1.5, zinc: 0.7 },
+  '豆乳（1杯）':             { vitamin_b1: 0.12, vitamin_b2: 0.04, vitamin_e: 1.2, folate: 30, calcium: 30, potassium: 390, magnesium: 48, iron: 1.6, zinc: 0.6 },
+}
+
+// マイクロ栄養素データをFOOD_DBに反映（対象食品のみ）
+for (const food of FOOD_DB) {
+  const micro = FOOD_MICRO_DATA[food.name]
+  if (micro) Object.assign(food, micro)
+}
+
 const MEAL_TYPES = [
   { key: 'breakfast', label: '朝食',   icon: '🌅' },
   { key: 'lunch',     label: '昼食',   icon: '☀️' },
@@ -379,12 +450,38 @@ type TabKey = 'search' | 'manual' | 'ai'
 const UNITS = ['g', 'ml', '個', '杯', '枚', '本', '切れ', '袋', '缶', 'パック'] as const
 type Unit = typeof UNITS[number]
 
+type MicroNutrients = {
+  vitamin_a?: number; vitamin_d?: number; vitamin_e?: number; vitamin_k?: number;
+  vitamin_b1?: number; vitamin_b2?: number; vitamin_b6?: number; vitamin_b12?: number;
+  vitamin_c?: number; niacin?: number; pantothenic_acid?: number; folate?: number; biotin?: number;
+  calcium?: number; phosphorus?: number; potassium?: number; sulfur?: number; chlorine?: number;
+  sodium?: number; magnesium?: number; iron?: number; zinc?: number; copper?: number;
+  manganese?: number; iodine?: number; selenium?: number; molybdenum?: number; chromium?: number;
+  cobalt?: number;
+}
+
 type NutrientForm = {
   foodName: string
   calories: string
   protein: string
   carbs: string
   fat: string
+  micro?: MicroNutrients
+}
+
+function pickMicro(src: { [k: string]: unknown }): MicroNutrients {
+  const keys: (keyof MicroNutrients)[] = [
+    'vitamin_a','vitamin_d','vitamin_e','vitamin_k','vitamin_b1','vitamin_b2','vitamin_b6','vitamin_b12','vitamin_c',
+    'niacin','pantothenic_acid','folate','biotin',
+    'calcium','phosphorus','potassium','sulfur','chlorine','sodium','magnesium','iron','zinc','copper',
+    'manganese','iodine','selenium','molybdenum','chromium','cobalt',
+  ]
+  const out: MicroNutrients = {}
+  for (const k of keys) {
+    const v = src[k]
+    if (v != null) (out as Record<string, number>)[k] = Number(v)
+  }
+  return out
 }
 
 // portion文字列（"150g", "200ml" 等）と量・単位からスケールを計算して栄養素を返す
@@ -392,18 +489,48 @@ function calcNutrients(food: Food, qty: number, unit: Unit) {
   const m = food.portion.match(/^(\d+(?:\.\d+)?)(g|ml)/)
   let scale: number
   if (m && (unit === 'g' || unit === 'ml')) {
-    // 重量・容量ベース: ユーザー入力 / DB基準量
     scale = qty / parseFloat(m[1])
   } else {
-    // 個数ベース: 1単位 = 1ポーション
     scale = qty
   }
-  const r = (v: number, d = 1) => Math.round(v * scale * 10 ** d) / 10 ** d
+  const r  = (v: number, d = 1) => Math.round(v * scale * 10 ** d) / 10 ** d
+  const rn = (v: number | undefined) => v != null ? r(v, 2) : undefined
   return {
     calories: r(food.calories, 0),
     protein:  r(food.protein),
     carbs:    r(food.carbs),
     fat:      r(food.fat),
+    // vitamins
+    vitamin_a:        rn(food.vitamin_a),
+    vitamin_d:        rn(food.vitamin_d),
+    vitamin_e:        rn(food.vitamin_e),
+    vitamin_k:        rn(food.vitamin_k),
+    vitamin_b1:       rn(food.vitamin_b1),
+    vitamin_b2:       rn(food.vitamin_b2),
+    vitamin_b6:       rn(food.vitamin_b6),
+    vitamin_b12:      rn(food.vitamin_b12),
+    vitamin_c:        rn(food.vitamin_c),
+    niacin:           rn(food.niacin),
+    pantothenic_acid: rn(food.pantothenic_acid),
+    folate:           rn(food.folate),
+    biotin:           rn(food.biotin),
+    // minerals
+    calcium:    rn(food.calcium),
+    phosphorus: rn(food.phosphorus),
+    potassium:  rn(food.potassium),
+    sulfur:     rn(food.sulfur),
+    chlorine:   rn(food.chlorine),
+    sodium:     rn(food.sodium),
+    magnesium:  rn(food.magnesium),
+    iron:       rn(food.iron),
+    zinc:       rn(food.zinc),
+    copper:     rn(food.copper),
+    manganese:  rn(food.manganese),
+    iodine:     rn(food.iodine),
+    selenium:   rn(food.selenium),
+    molybdenum: rn(food.molybdenum),
+    chromium:   rn(food.chromium),
+    cobalt:     rn(food.cobalt),
   }
 }
 
@@ -501,6 +628,7 @@ function SearchTab({
               protein:  String(food.protein),
               carbs:    String(food.carbs),
               fat:      String(food.fat),
+              micro:    pickMicro(food as unknown as Record<string, unknown>),
             })}
             className="flex items-center justify-between p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-orange-500 active:scale-[0.98] transition-all text-left"
           >
@@ -602,8 +730,9 @@ function ManualTab({
     const nutri = calculated
       ? { calories: String(calculated.calories), protein: String(calculated.protein), carbs: String(calculated.carbs), fat: String(calculated.fat) }
       : manualNutrients
+    const micro = calculated ? pickMicro(calculated as unknown as Record<string, unknown>) : undefined
 
-    onAddItem({ foodName: label, ...nutri })
+    onAddItem({ foodName: label, ...nutri, micro })
 
     setFoodQuery('')
     setMatchedFood(null)
@@ -961,6 +1090,7 @@ function MealNewInner() {
               carbs:      item.carbs    || null,
               fat:        item.fat      || null,
               recordedAt: `${recordedAt}T00:00:00.000Z`,
+              ...(item.micro ?? {}),
             }),
           })
         )
