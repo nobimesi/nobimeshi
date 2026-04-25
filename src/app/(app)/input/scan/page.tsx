@@ -227,17 +227,31 @@ export default function ScanPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // e.target.value = '' は onload 完了後に移動（Safari で File オブジェクトが
+    // 同期クリアにより無効化され "The string did not match the expected pattern." が
+    // 発生するのを防ぐ）
+    const input = e.target
     const reader = new FileReader()
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string
+      if (!dataUrl) return
       setPreview(dataUrl)
-      setImageBase64(dataUrl.split(',')[1])
-      setMediaType(file.type || 'image/jpeg')
+      // base64 部分のみ抽出（data:[type];base64, の後ろ）
+      const commaIdx = dataUrl.indexOf(',')
+      setImageBase64(commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl)
+      // Anthropic API がサポートするMIMEタイプに正規化
+      const SUPPORTED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      const mt = file.type.toLowerCase()
+      setMediaType(SUPPORTED.includes(mt) ? mt : 'image/jpeg')
+      // FileReader 完了後にクリア（Safari の File 無効化を回避）
+      input.value = ''
+    }
+    reader.onerror = () => {
+      setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
     }
     reader.readAsDataURL(file)
     setResult(null)
     setAnalyzeError('')
-    e.target.value = ''
   }
 
   const reset = () => {
@@ -292,6 +306,8 @@ export default function ScanPage() {
     const child = children[selectedChildIndex]
     const today = toLocalDateStr(new Date())
     try {
+      // ローカル正午をUTCに変換（UTCハードコードではなくローカル日時で記録）
+      const recordedAt = new Date(`${today}T12:00:00`).toISOString()
       const responses = await Promise.all(
         result.map(food =>
           fetch('/api/meal-records', {
@@ -305,7 +321,7 @@ export default function ScanPage() {
               protein: food.protein || null,
               carbs: food.carbs || null,
               fat: food.fat || null,
-              recordedAt: `${today}T12:00:00.000Z`,
+              recordedAt,
               vitamin_c: food.vitamin_c ?? null,
               calcium: food.calcium ?? null,
               iron: food.iron ?? null,
@@ -403,11 +419,19 @@ export default function ScanPage() {
               {/* 解析結果 */}
               {result && (
                 <div className="flex flex-col gap-3">
-                  {/* 認識結果ヘッダー */}
-                  <div className="flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-500" />
-                    <span className="text-sm font-semibold text-gray-700">認識された食べ物（{result.length}品目）</span>
-                    <span className="ml-auto text-xs font-bold text-orange-500">{Math.round(totalCalories)}kcal</span>
+                  {/* 認識結果サマリーカード */}
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-5 h-5 text-white" />
+                      <div>
+                        <p className="text-white font-bold text-base">{result.length}品目を認識</p>
+                        <p className="text-green-100 text-xs">AI解析完了</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-bold text-2xl">{Math.round(totalCalories)}</p>
+                      <p className="text-green-100 text-xs">合計 kcal</p>
+                    </div>
                   </div>
 
                   {result.map((food, i) => (

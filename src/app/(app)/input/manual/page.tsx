@@ -1,9 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, Trash2, Loader2, Search } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+
+interface Child {
+  id: string
+  name: string
+  avatar: string
+  birth_date: string
+}
 
 interface FoodEntry {
   id: number
@@ -14,7 +21,22 @@ interface FoodEntry {
   protein: number | null
   carbs: number | null
   fat: number | null
+  // micros
+  vitamin_a: number | null
+  vitamin_d: number | null
+  vitamin_e: number | null
+  vitamin_c: number | null
+  vitamin_b1: number | null
+  vitamin_b2: number | null
+  folate: number | null
+  calcium: number | null
+  iron: number | null
+  zinc: number | null
+  potassium: number | null
+  magnesium: number | null
+  sodium: number | null
   loading: boolean
+  error: string
 }
 
 const MEAL_TYPE_LABELS: Record<string, string> = {
@@ -24,51 +46,145 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   snack: 'おやつ',
 }
 
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function emptyEntry(id: number): FoodEntry {
+  return {
+    id, name: '', amount: '', unit: 'g',
+    calories: null, protein: null, carbs: null, fat: null,
+    vitamin_a: null, vitamin_d: null, vitamin_e: null, vitamin_c: null,
+    vitamin_b1: null, vitamin_b2: null, folate: null,
+    calcium: null, iron: null, zinc: null,
+    potassium: null, magnesium: null, sodium: null,
+    loading: false, error: '',
+  }
+}
+
 export default function ManualInputPage() {
   const router = useRouter()
+  const [children, setChildren] = useState<Child[]>([])
+  const [childIndex, setChildIndex] = useState(0)
   const [mealType, setMealType] = useState('breakfast')
-  const [foods, setFoods] = useState<FoodEntry[]>([
-    { id: 1, name: '', amount: '', unit: 'g', calories: null, protein: null, carbs: null, fat: null, loading: false },
-  ])
+  const [date, setDate] = useState(toLocalDateStr(new Date()))
+  const [foods, setFoods] = useState<FoodEntry[]>([emptyEntry(1)])
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+  }, [])
 
   const addFood = () => {
-    setFoods((prev) => [
-      ...prev,
-      { id: Date.now(), name: '', amount: '', unit: 'g', calories: null, protein: null, carbs: null, fat: null, loading: false },
-    ])
+    setFoods(prev => [...prev, emptyEntry(Date.now())])
   }
 
   const removeFood = (id: number) => {
-    setFoods((prev) => prev.filter((f) => f.id !== id))
+    setFoods(prev => prev.filter(f => f.id !== id))
   }
 
-  const updateFood = (id: number, field: keyof FoodEntry, value: string | number | boolean | null) => {
-    setFoods((prev) => prev.map((f) => (f.id === id ? { ...f, [field]: value } : f)))
+  const updateFood = (id: number, patch: Partial<FoodEntry>) => {
+    setFoods(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
   }
 
   const fetchNutrition = async (id: number, name: string) => {
     if (!name.trim()) return
-    updateFood(id, 'loading', true)
-    // AIによる栄養素補完シミュレーション
-    await new Promise((r) => setTimeout(r, 800))
-    // サンプルデータ
-    const mock: Record<string, { calories: number; protein: number; carbs: number; fat: number }> = {
-      'ごはん': { calories: 168, protein: 2.5, carbs: 37.1, fat: 0.3 },
-      '鶏むね肉': { calories: 108, protein: 22.3, carbs: 0, fat: 1.5 },
-      'ブロッコリー': { calories: 33, protein: 3.5, carbs: 5.2, fat: 0.4 },
-      'トマト': { calories: 20, protein: 0.7, carbs: 4.7, fat: 0.1 },
+    updateFood(id, { loading: true, error: '' })
+    try {
+      const res = await fetch('/api/food-nutrition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ foodName: name.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        updateFood(id, { loading: false, error: data.error ?? '取得できませんでした' })
+        return
+      }
+      const r = data.result
+      updateFood(id, {
+        loading: false, error: '',
+        calories: r.calories ?? null,
+        protein:  r.protein  ?? null,
+        carbs:    r.carbs    ?? null,
+        fat:      r.fat      ?? null,
+        vitamin_a:  r.vitamin_a  ?? null,
+        vitamin_d:  r.vitamin_d  ?? null,
+        vitamin_e:  r.vitamin_e  ?? null,
+        vitamin_c:  r.vitamin_c  ?? null,
+        vitamin_b1: r.vitamin_b1 ?? null,
+        vitamin_b2: r.vitamin_b2 ?? null,
+        folate:     r.folate     ?? null,
+        calcium:    r.calcium    ?? null,
+        iron:       r.iron       ?? null,
+        zinc:       r.zinc       ?? null,
+        potassium:  r.potassium  ?? null,
+        magnesium:  r.magnesium  ?? null,
+        sodium:     r.sodium     ?? null,
+      })
+    } catch {
+      updateFood(id, { loading: false, error: '通信エラーが発生しました' })
     }
-    const data = mock[name] || { calories: 50, protein: 2.0, carbs: 8.0, fat: 1.5 }
-    setFoods((prev) =>
-      prev.map((f) =>
-        f.id === id
-          ? { ...f, ...data, loading: false }
-          : f
-      )
-    )
   }
 
-  const totalCalories = foods.reduce((sum, f) => sum + (f.calories || 0), 0)
+  const handleSave = async () => {
+    const child = children[childIndex]
+    if (!child) return
+    const validFoods = foods.filter(f => f.name.trim())
+    if (validFoods.length === 0) return
+
+    setSaving(true)
+    setSaveError('')
+
+    // recordedAt: 選択した日付のローカル正午をISO文字列で送る
+    const recordedAt = new Date(`${date}T12:00:00`).toISOString()
+
+    try {
+      await Promise.all(validFoods.map(f =>
+        fetch('/api/meal-records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            childId:  child.id,
+            mealType,
+            foodName: f.name.trim(),
+            calories: f.calories,
+            protein:  f.protein,
+            carbs:    f.carbs,
+            fat:      f.fat,
+            notes:    f.amount ? `${f.amount}${f.unit}` : null,
+            recordedAt,
+            vitamin_a:  f.vitamin_a,
+            vitamin_d:  f.vitamin_d,
+            vitamin_e:  f.vitamin_e,
+            vitamin_c:  f.vitamin_c,
+            vitamin_b1: f.vitamin_b1,
+            vitamin_b2: f.vitamin_b2,
+            folate:     f.folate,
+            calcium:    f.calcium,
+            iron:       f.iron,
+            zinc:       f.zinc,
+            potassium:  f.potassium,
+            magnesium:  f.magnesium,
+            sodium:     f.sodium,
+          }),
+        }).then(r => { if (!r.ok) throw new Error('保存に失敗しました') })
+      ))
+      router.push('/home')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const child = children[childIndex]
+  const totalCalories = foods.reduce((sum, f) => sum + (f.calories ?? 0), 0)
+  const canSave = !saving && !!child && foods.some(f => f.name.trim())
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -79,21 +195,42 @@ export default function ManualInputPage() {
         <h1 className="text-lg font-bold text-gray-800">手動で入力</h1>
       </div>
 
-      <div className="px-4 flex flex-col gap-4">
-        {/* 食事タイプ選択 */}
+      <div className="px-4 flex flex-col gap-4 pb-28">
+
+        {/* 対象の子供 */}
+        {children.length > 0 && (
+          <div className="bg-white border border-gray-100 rounded-xl p-3">
+            <p className="text-xs font-semibold text-gray-500 mb-2">対象の子供</p>
+            {children.length > 1 && (
+              <div className="flex gap-2 mb-2 overflow-x-auto">
+                {children.map((c, i) => (
+                  <button key={c.id} type="button" onClick={() => setChildIndex(i)}
+                    className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      childIndex === i ? 'bg-orange-500 text-white border-orange-500' : 'bg-gray-50 text-gray-500 border-gray-200'
+                    }`}>
+                    <span>{c.avatar}</span>{c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {child && (
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{child.avatar}</span>
+                <p className="text-sm font-medium text-gray-700">{child.name}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 食事タイプ */}
         <div>
           <p className="text-sm text-gray-500 mb-2">食事の種類</p>
           <div className="flex gap-2">
             {Object.entries(MEAL_TYPE_LABELS).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setMealType(key)}
+              <button key={key} onClick={() => setMealType(key)}
                 className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
-                  mealType === key
-                    ? 'bg-orange-500 text-white border-orange-500'
-                    : 'bg-white text-gray-600 border-gray-200'
-                }`}
-              >
+                  mealType === key ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200'
+                }`}>
                 {label}
               </button>
             ))}
@@ -105,7 +242,8 @@ export default function ManualInputPage() {
           <p className="text-sm text-gray-500 mb-2">日付</p>
           <input
             type="date"
-            defaultValue={new Date().toISOString().split('T')[0]}
+            value={date}
+            onChange={e => setDate(e.target.value)}
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
           />
         </div>
@@ -122,16 +260,14 @@ export default function ManualInputPage() {
                       type="text"
                       placeholder="食材・料理名を入力"
                       value={food.name}
-                      onChange={(e) => updateFood(food.id, 'name', e.target.value)}
-                      onBlur={(e) => fetchNutrition(food.id, e.target.value)}
+                      onChange={e => updateFood(food.id, { name: e.target.value })}
+                      onBlur={e => fetchNutrition(food.id, e.target.value)}
                       className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                     />
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   </div>
-                  <button
-                    onClick={() => removeFood(food.id)}
-                    className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-400"
-                  >
+                  <button onClick={() => removeFood(food.id)}
+                    className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-red-400">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -139,14 +275,14 @@ export default function ManualInputPage() {
                 <div className="flex gap-2 mb-3">
                   <input
                     type="number"
-                    placeholder="量"
+                    placeholder="量（任意）"
                     value={food.amount}
-                    onChange={(e) => updateFood(food.id, 'amount', e.target.value)}
+                    onChange={e => updateFood(food.id, { amount: e.target.value })}
                     className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                   />
                   <select
                     value={food.unit}
-                    onChange={(e) => updateFood(food.id, 'unit', e.target.value)}
+                    onChange={e => updateFood(food.id, { unit: e.target.value })}
                     className="w-20 border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                   >
                     <option value="g">g</option>
@@ -163,34 +299,40 @@ export default function ManualInputPage() {
                     <Loader2 className="w-3 h-3 animate-spin" />
                     AIが栄養素を計算中...
                   </div>
+                ) : food.error ? (
+                  <p className="text-xs text-red-500">{food.error}</p>
                 ) : food.calories !== null ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-orange-50 rounded-lg p-2 text-center">
-                      <p className="text-xs text-gray-400">kcal</p>
-                      <p className="text-xs font-medium text-gray-700">{food.calories}</p>
+                  <div className="flex flex-col gap-2">
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { label: 'kcal', value: food.calories,  bg: 'bg-orange-50',  text: 'text-orange-600' },
+                        { label: 'P(g)',  value: food.protein,   bg: 'bg-blue-50',    text: 'text-blue-600' },
+                        { label: 'C(g)',  value: food.carbs,     bg: 'bg-yellow-50',  text: 'text-yellow-700' },
+                        { label: 'F(g)',  value: food.fat,       bg: 'bg-red-50',     text: 'text-red-600' },
+                      ].map(item => (
+                        <div key={item.label} className={`${item.bg} rounded-lg p-2 text-center`}>
+                          <p className="text-xs text-gray-400">{item.label}</p>
+                          <p className={`text-xs font-semibold ${item.text}`}>{item.value ?? '–'}</p>
+                        </div>
+                      ))}
                     </div>
-                    <div className="bg-blue-50 rounded-lg p-2 text-center">
-                      <p className="text-xs text-gray-400">P(g)</p>
-                      <p className="text-xs font-medium text-gray-700">{food.protein}</p>
-                    </div>
-                    <div className="bg-yellow-50 rounded-lg p-2 text-center">
-                      <p className="text-xs text-gray-400">C(g)</p>
-                      <p className="text-xs font-medium text-gray-700">{food.carbs}</p>
-                    </div>
-                    <div className="bg-red-50 rounded-lg p-2 text-center">
-                      <p className="text-xs text-gray-400">F(g)</p>
-                      <p className="text-xs font-medium text-gray-700">{food.fat}</p>
-                    </div>
+                    {/* 主要ミネラル・ビタミンのサマリー */}
+                    {(food.calcium || food.iron || food.vitamin_c || food.vitamin_d) ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {food.calcium  ? <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-100">Ca {food.calcium}mg</span>  : null}
+                        {food.iron     ? <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-100">Fe {food.iron}mg</span>     : null}
+                        {food.vitamin_c ? <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-100">VC {food.vitamin_c}mg</span> : null}
+                        {food.vitamin_d ? <span className="bg-green-50 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-100">VD {food.vitamin_d}μg</span> : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
             ))}
           </div>
 
-          <button
-            onClick={addFood}
-            className="mt-3 w-full py-3 border-2 border-dashed border-orange-200 rounded-xl flex items-center justify-center gap-2 text-sm text-orange-500 font-medium hover:bg-orange-50 transition-colors"
-          >
+          <button onClick={addFood}
+            className="mt-3 w-full py-3 border-2 border-dashed border-orange-200 rounded-xl flex items-center justify-center gap-2 text-sm text-orange-500 font-medium hover:bg-orange-50 transition-colors">
             <Plus className="w-4 h-4" />
             食材を追加
           </button>
@@ -200,16 +342,24 @@ export default function ManualInputPage() {
         {totalCalories > 0 && (
           <div className="bg-orange-50 rounded-xl p-3 flex items-center justify-between">
             <span className="text-sm text-gray-600">合計カロリー</span>
-            <span className="text-lg font-bold text-orange-500">{totalCalories} kcal</span>
+            <span className="text-lg font-bold text-orange-500">{Math.round(totalCalories)} kcal</span>
           </div>
         )}
 
-        {/* 記録ボタン */}
-        <button
-          onClick={() => router.push('/home')}
-          className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl active:scale-95 transition-transform shadow-sm shadow-orange-200 mb-6"
-        >
-          記録する
+        {saveError && (
+          <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl px-4 py-3">{saveError}</p>
+        )}
+      </div>
+
+      {/* 記録ボタン（固定） */}
+      <div className="fixed bottom-16 left-0 right-0 px-4 pb-3 bg-white/80 backdrop-blur-sm border-t border-gray-100">
+        <button onClick={handleSave} disabled={!canSave}
+          className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60">
+          {saving ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />保存中...</>
+          ) : (
+            '記録する'
+          )}
         </button>
       </div>
     </div>

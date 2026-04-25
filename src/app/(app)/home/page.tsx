@@ -412,7 +412,7 @@ function generateAdvice(
   childIsFemale: boolean,
   childName: string,
 ): string[] {
-  const name = childName || 'お子さん'
+  const name = childName ? `${childName}ちゃん` : 'お子さん'
 
   // カロリーがほぼゼロなら記録を促すだけ
   if (kcalPct < 10) {
@@ -742,7 +742,7 @@ export default function HomePage() {
           <h2 className="text-sm font-semibold text-gray-700">食事記録</h2>
           <span className="text-xs text-gray-400">
             {isToday ? '今日' : `${selectedDate.getMonth() + 1}月${selectedDate.getDate()}日`}
-            {child ? `・${child.name}` : ''}
+            {child ? `・${child.name}ちゃん` : ''}
           </span>
         </div>
         <div className="flex flex-col gap-2.5">
