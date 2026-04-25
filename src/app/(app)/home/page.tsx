@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Flame } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Flame, PenLine, X, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 type Child = {
@@ -37,40 +37,40 @@ type MealRecord = {
 }
 
 // ビタミン13種のDRI（6〜7歳男性基準、日本人食事摂取基準2020年版）
-const VITAMIN_DRI: { key: keyof MealRecord; dri: number }[] = [
-  { key: 'vitamin_a',        dri: 400  },
-  { key: 'vitamin_d',        dri: 3    },
-  { key: 'vitamin_e',        dri: 5    },
-  { key: 'vitamin_k',        dri: 90   },
-  { key: 'vitamin_b1',       dri: 0.8  },
-  { key: 'vitamin_b2',       dri: 0.9  },
-  { key: 'vitamin_b6',       dri: 0.8  },
-  { key: 'vitamin_b12',      dri: 1.3  },
-  { key: 'vitamin_c',        dri: 60   },
-  { key: 'niacin',           dri: 9    },
-  { key: 'pantothenic_acid', dri: 4    },
-  { key: 'folate',           dri: 140  },
-  { key: 'biotin',           dri: 30   },
+const VITAMIN_DRI: { key: keyof MealRecord; label: string; unit: string; dri: number }[] = [
+  { key: 'vitamin_a',        label: 'ビタミンA',    unit: 'μg', dri: 400  },
+  { key: 'vitamin_d',        label: 'ビタミンD',    unit: 'μg', dri: 3    },
+  { key: 'vitamin_e',        label: 'ビタミンE',    unit: 'mg', dri: 5    },
+  { key: 'vitamin_k',        label: 'ビタミンK',    unit: 'μg', dri: 90   },
+  { key: 'vitamin_b1',       label: 'ビタミンB1',   unit: 'mg', dri: 0.8  },
+  { key: 'vitamin_b2',       label: 'ビタミンB2',   unit: 'mg', dri: 0.9  },
+  { key: 'vitamin_b6',       label: 'ビタミンB6',   unit: 'mg', dri: 0.8  },
+  { key: 'vitamin_b12',      label: 'ビタミンB12',  unit: 'μg', dri: 1.3  },
+  { key: 'vitamin_c',        label: 'ビタミンC',    unit: 'mg', dri: 60   },
+  { key: 'niacin',           label: 'ナイアシン',   unit: 'mg', dri: 9    },
+  { key: 'pantothenic_acid', label: 'パントテン酸', unit: 'mg', dri: 4    },
+  { key: 'folate',           label: '葉酸',         unit: 'μg', dri: 140  },
+  { key: 'biotin',           label: 'ビオチン',     unit: 'μg', dri: 30   },
 ]
 
 // ミネラル16種のDRI（同上）
-const MINERAL_DRI: { key: keyof MealRecord; dri: number }[] = [
-  { key: 'calcium',    dri: 600  },
-  { key: 'phosphorus', dri: 500  },
-  { key: 'potassium',  dri: 1300 },
-  { key: 'sulfur',     dri: 700  },
-  { key: 'chlorine',   dri: 2000 },
-  { key: 'sodium',     dri: 800  },
-  { key: 'magnesium',  dri: 130  },
-  { key: 'iron',       dri: 5.5  },
-  { key: 'zinc',       dri: 5    },
-  { key: 'copper',     dri: 0.4  },
-  { key: 'manganese',  dri: 2.0  },
-  { key: 'iodine',     dri: 90   },
-  { key: 'selenium',   dri: 20   },
-  { key: 'molybdenum', dri: 15   },
-  { key: 'chromium',   dri: 10   },
-  { key: 'cobalt',     dri: 0.1  },
+const MINERAL_DRI: { key: keyof MealRecord; label: string; unit: string; dri: number }[] = [
+  { key: 'calcium',    label: 'カルシウム',   unit: 'mg', dri: 600  },
+  { key: 'phosphorus', label: 'リン',         unit: 'mg', dri: 500  },
+  { key: 'potassium',  label: 'カリウム',     unit: 'mg', dri: 1300 },
+  { key: 'sulfur',     label: '硫黄',         unit: 'mg', dri: 700  },
+  { key: 'chlorine',   label: '塩素',         unit: 'mg', dri: 2000 },
+  { key: 'sodium',     label: 'ナトリウム',   unit: 'mg', dri: 800  },
+  { key: 'magnesium',  label: 'マグネシウム', unit: 'mg', dri: 130  },
+  { key: 'iron',       label: '鉄',           unit: 'mg', dri: 5.5  },
+  { key: 'zinc',       label: '亜鉛',         unit: 'mg', dri: 5    },
+  { key: 'copper',     label: '銅',           unit: 'mg', dri: 0.4  },
+  { key: 'manganese',  label: 'マンガン',     unit: 'mg', dri: 2.0  },
+  { key: 'iodine',     label: 'ヨウ素',       unit: 'μg', dri: 90   },
+  { key: 'selenium',   label: 'セレン',       unit: 'μg', dri: 20   },
+  { key: 'molybdenum', label: 'モリブデン',   unit: 'μg', dri: 15   },
+  { key: 'chromium',   label: 'クロム',       unit: 'μg', dri: 10   },
+  { key: 'cobalt',     label: 'コバルト',     unit: 'μg', dri: 0.1  },
 ]
 
 /** ビタミンまたはミネラルの平均DRI達成率（0〜100）を返す */
@@ -90,6 +90,10 @@ function calcAge(birthDate: string): number {
   const m = today.getMonth() - birth.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
   return age
+}
+
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 const NUTRIENT_TARGETS = [
@@ -156,12 +160,14 @@ function WeekCalendar({ selectedDate, onSelect }: { selectedDate: Date; onSelect
   )
 }
 
-function NutritionBar({ label, unit, bg, value, max }: { label: string; unit: string; bg: string; value: number; max: number }) {
+function NutritionBar({ label, unit, bg, value, max, onClick }: {
+  label: string; unit: string; bg: string; value: number; max: number; onClick?: () => void
+}) {
   const pct = Math.min((value / max) * 100, 100)
   const isLow = pct < 50
   const isHigh = pct > 90
-  return (
-    <div className="flex items-center gap-2.5">
+  const inner = (
+    <div className={`flex items-center gap-2.5 w-full ${onClick ? 'active:opacity-70' : ''}`}>
       <span className="text-xs text-gray-500 w-16 shrink-0 font-medium">{label}</span>
       <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${bg} ${isHigh ? 'opacity-100' : 'opacity-80'}`} style={{ width: `${pct}%` }} />
@@ -169,12 +175,177 @@ function NutritionBar({ label, unit, bg, value, max }: { label: string; unit: st
       <div className="w-24 text-right shrink-0">
         <span className={`text-xs font-semibold ${isLow ? 'text-gray-400' : isHigh ? 'text-orange-500' : 'text-gray-700'}`}>{Math.round(value)}</span>
         <span className="text-xs text-gray-300">/{max}{unit}</span>
+        {onClick && <span className="text-xs text-gray-300 ml-0.5">›</span>}
       </div>
     </div>
   )
+  if (onClick) return <button className="w-full text-left" onClick={onClick}>{inner}</button>
+  return inner
 }
 
-function MealCard({ mealType, foods }: { mealType: typeof MEAL_TYPES[number]; foods: MealRecord[] }) {
+function MicroDetailModal({
+  type, records, onClose,
+}: {
+  type: 'vitamin' | 'mineral'; records: MealRecord[]; onClose: () => void
+}) {
+  const dris = type === 'vitamin' ? VITAMIN_DRI : MINERAL_DRI
+  const title = type === 'vitamin' ? 'ビタミン詳細（13種）' : 'ミネラル詳細（16種）'
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-lg mx-auto max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100 shrink-0">
+          <h3 className="text-base font-bold text-gray-800">{title}</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-6 py-3 flex flex-col">
+          {dris.map(({ key, label, unit, dri }) => {
+            const total = records.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+            const pct = dri > 0 ? Math.min(100, Math.round((total / dri) * 100)) : 0
+            const hasData = total > 0
+            const barColor = pct >= 80 ? 'bg-green-400' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-300'
+            const display = total < 10
+              ? (Math.round(total * 100) / 100).toString()
+              : total < 100
+              ? (Math.round(total * 10) / 10).toString()
+              : Math.round(total).toString()
+            return (
+              <div key={key as string} className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
+                <span className="text-xs text-gray-600 w-24 shrink-0">{label}</span>
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  {hasData && <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />}
+                </div>
+                <div className="text-right w-20 shrink-0">
+                  <span className="text-xs font-medium text-gray-700">{hasData ? `${display}${unit}` : '–'}</span>
+                  {hasData && <span className="text-xs text-gray-400 ml-1">({pct}%)</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-xs text-gray-300 text-center pb-4 pt-1 shrink-0">※ 6〜7歳男性基準（参考値）</p>
+      </div>
+    </>
+  )
+}
+
+function EditMealModal({
+  record, onClose, onSaved,
+}: {
+  record: MealRecord; onClose: () => void; onSaved: () => void
+}) {
+  const [foodName, setFoodName] = useState(record.food_name)
+  const [calories, setCalories] = useState(record.calories?.toString() ?? '')
+  const [protein, setProtein] = useState(record.protein?.toString() ?? '')
+  const [carbs, setCarbs] = useState(record.carbs?.toString() ?? '')
+  const [fat, setFat] = useState(record.fat?.toString() ?? '')
+  const [notes, setNotes] = useState(record.notes ?? '')
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleSave = async () => {
+    if (!foodName.trim()) return
+    setSaving(true)
+    await fetch(`/api/meal-records?id=${record.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ foodName, calories, protein, carbs, fat, notes }),
+    })
+    setSaving(false)
+    onSaved()
+    onClose()
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    await fetch(`/api/meal-records?id=${record.id}`, { method: 'DELETE' })
+    setDeleting(false)
+    onSaved()
+    onClose()
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl max-w-lg mx-auto">
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-800">食事を編集</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="px-6 py-4 flex flex-col gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">食品名</label>
+            <input
+              value={foodName}
+              onChange={e => setFoodName(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">カロリー (kcal)</label>
+              <input type="number" value={calories} onChange={e => setCalories(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">たんぱく質 (g)</label>
+              <input type="number" value={protein} onChange={e => setProtein(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">炭水化物 (g)</label>
+              <input type="number" value={carbs} onChange={e => setCarbs(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">脂質 (g)</label>
+              <input type="number" value={fat} onChange={e => setFat(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">メモ</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+            />
+          </div>
+          <div className="flex gap-3 mt-1">
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 py-3 border border-red-200 text-red-500 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 active:bg-red-50 disabled:opacity-40"
+            >
+              <Trash2 className="w-4 h-4" />
+              {deleting ? '削除中...' : '削除'}
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !foodName.trim()}
+              className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm active:scale-95 transition-transform disabled:opacity-40"
+            >
+              {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function MealCard({
+  mealType, foods, dateStr, onEdit,
+}: {
+  mealType: typeof MEAL_TYPES[number]; foods: MealRecord[]; dateStr: string; onEdit: (record: MealRecord) => void
+}) {
   const totalKcal = foods.reduce((s, f) => s + (f.calories ?? 0), 0)
   const hasFood = foods.length > 0
 
@@ -188,7 +359,7 @@ function MealCard({ mealType, foods }: { mealType: typeof MEAL_TYPES[number]; fo
         <div className="flex items-center gap-2">
           {hasFood && <span className="text-xs font-bold text-orange-500">{Math.round(totalKcal)}kcal</span>}
           <Link
-            href={`/meal/new?meal=${mealType.key}`}
+            href={`/meal/new?meal=${mealType.key}&date=${dateStr}`}
             className="w-7 h-7 bg-orange-50 rounded-full flex items-center justify-center active:bg-orange-100"
           >
             <Plus className="w-4 h-4 text-orange-500" />
@@ -199,12 +370,20 @@ function MealCard({ mealType, foods }: { mealType: typeof MEAL_TYPES[number]; fo
         <div className="px-4 pb-3 flex flex-col gap-2 border-t border-gray-50">
           {foods.map((food) => (
             <div key={food.id} className="flex items-center justify-between py-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <div className="w-1.5 h-1.5 rounded-full bg-orange-300 shrink-0" />
-                <span className="text-sm text-gray-700">{food.food_name}</span>
-                {food.notes && <span className="text-xs text-gray-400">{food.notes}</span>}
+                <span className="text-sm text-gray-700 truncate">{food.food_name}</span>
+                {food.notes && <span className="text-xs text-gray-400 truncate">{food.notes}</span>}
               </div>
-              {food.calories !== null && <span className="text-xs text-gray-500">{Math.round(food.calories)}kcal</span>}
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                {food.calories !== null && <span className="text-xs text-gray-500">{Math.round(food.calories)}kcal</span>}
+                <button
+                  onClick={() => onEdit(food)}
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-50 active:bg-gray-100"
+                >
+                  <PenLine className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -224,6 +403,8 @@ export default function HomePage() {
   const [children, setChildren] = useState<Child[]>([])
   const [mealRecords, setMealRecords] = useState<MealRecord[]>([])
   const [loadingMeals, setLoadingMeals] = useState(false)
+  const [editMeal, setEditMeal] = useState<MealRecord | null>(null)
+  const [microModal, setMicroModal] = useState<'vitamin' | 'mineral' | null>(null)
 
   useEffect(() => {
     fetch('/api/children')
@@ -233,7 +414,7 @@ export default function HomePage() {
   }, [])
 
   const fetchMeals = useCallback((childId: string, date: Date) => {
-    const dateStr = date.toISOString().split('T')[0]
+    const dateStr = toLocalDateStr(date)
     setLoadingMeals(true)
     fetch(`/api/meal-records?childId=${childId}&date=${dateStr}`)
       .then(r => r.json())
@@ -250,6 +431,7 @@ export default function HomePage() {
 
   const isToday = selectedDate.toDateString() === new Date().toDateString()
   const child = children[selectedChild]
+  const localDateStr = toLocalDateStr(selectedDate)
 
   // 栄養素合計
   const totals = {
@@ -264,6 +446,11 @@ export default function HomePage() {
   // ビタミン・ミネラルの平均DRI達成率（%）
   const vitaminScore = calcMicroScore(mealRecords, VITAMIN_DRI)
   const mineralScore = calcMicroScore(mealRecords, MINERAL_DRI)
+
+  const handleEditSaved = () => {
+    const c = children[selectedChild]
+    if (c) fetchMeals(c.id, selectedDate)
+  }
 
   return (
     <div className="flex flex-col bg-gray-50 min-h-screen">
@@ -365,6 +552,7 @@ export default function HomePage() {
                 bg="bg-green-400"
                 value={vitaminScore}
                 max={100}
+                onClick={() => setMicroModal('vitamin')}
               />
               <NutritionBar
                 label="ミネラル"
@@ -372,6 +560,7 @@ export default function HomePage() {
                 bg="bg-teal-400"
                 value={mineralScore}
                 max={100}
+                onClick={() => setMicroModal('mineral')}
               />
             </div>
           )}
@@ -393,6 +582,8 @@ export default function HomePage() {
               key={meal.key}
               mealType={meal}
               foods={mealRecords.filter(r => r.meal_type === meal.key)}
+              dateStr={localDateStr}
+              onEdit={setEditMeal}
             />
           ))}
         </div>
@@ -418,6 +609,24 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ビタミン/ミネラル詳細モーダル */}
+      {microModal && (
+        <MicroDetailModal
+          type={microModal}
+          records={mealRecords}
+          onClose={() => setMicroModal(null)}
+        />
+      )}
+
+      {/* 食事編集モーダル */}
+      {editMeal && (
+        <EditMealModal
+          record={editMeal}
+          onClose={() => setEditMeal(null)}
+          onSaved={handleEditSaved}
+        />
       )}
     </div>
   )

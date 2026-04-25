@@ -1048,7 +1048,12 @@ function MealNewInner() {
   const [aiResult, setAiResult] = useState<NutrientForm | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [recordedAt, setRecordedAt] = useState(new Date().toISOString().split('T')[0])
+  const [recordedAt, setRecordedAt] = useState(() => {
+    const d = searchParams.get('date')
+    if (d) return d
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  })
 
   useEffect(() => {
     fetch('/api/children').then(r => r.json()).then(d => setChildren(d.children ?? [])).catch(console.error)
@@ -1089,7 +1094,7 @@ function MealNewInner() {
               protein:    item.protein  || null,
               carbs:      item.carbs    || null,
               fat:        item.fat      || null,
-              recordedAt: `${recordedAt}T00:00:00.000Z`,
+              recordedAt: `${recordedAt}T12:00:00.000Z`,
               ...(item.micro ?? {}),
             }),
           })

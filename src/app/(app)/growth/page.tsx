@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
-  BarChart, Bar, Cell,
+  BarChart, Bar, Cell, PieChart, Pie,
 } from 'recharts'
 import { Plus, TrendingUp, TrendingDown, X, Flame, Salad } from 'lucide-react'
 
@@ -503,6 +503,75 @@ function MicroRow({ dri, total }: { dri: DRI; total: number }) {
   )
 }
 
+// ビタミン・ミネラル平均達成率ドーナツグラフ
+function MicroScoreDonut({ records }: { records: MealRecord[] }) {
+  const vitaminScore = useMemo(() => {
+    let score = 0
+    for (const dri of VITAMIN_DRIS) {
+      score += Math.min(sumField(records, dri.key) / dri.goal, 1)
+    }
+    return Math.round((score / VITAMIN_DRIS.length) * 100)
+  }, [records])
+
+  const mineralScore = useMemo(() => {
+    let score = 0
+    for (const dri of MINERAL_DRIS) {
+      score += Math.min(sumField(records, dri.key) / dri.goal, 1)
+    }
+    return Math.round((score / MINERAL_DRIS.length) * 100)
+  }, [records])
+
+  const items = [
+    { label: 'ビタミン（13種）', score: vitaminScore, fillColor: '#4ade80', emptyColor: '#374151' },
+    { label: 'ミネラル（16種）', score: mineralScore, fillColor: '#2dd4bf', emptyColor: '#374151' },
+  ]
+
+  return (
+    <div className="bg-gray-800 rounded-2xl p-4">
+      <p className="text-xs font-semibold text-gray-400 mb-4">ビタミン・ミネラル平均達成率</p>
+      <div className="grid grid-cols-2 gap-4">
+        {items.map(item => {
+          const data = [
+            { name: '達成', value: item.score },
+            { name: '未達', value: Math.max(0, 100 - item.score) },
+          ]
+          return (
+            <div key={item.label} className="flex flex-col items-center gap-2">
+              <div className="relative w-24 h-24">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={30}
+                      outerRadius={42}
+                      startAngle={90}
+                      endAngle={-270}
+                      dataKey="value"
+                      strokeWidth={0}
+                    >
+                      <Cell fill={item.fillColor} />
+                      <Cell fill={item.emptyColor} />
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-lg font-bold text-white">
+                    {item.score}<span className="text-xs font-normal">%</span>
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 text-center">{item.label}</p>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-xs text-gray-600 text-center mt-3">※ DRI目標の平均達成率</p>
+    </div>
+  )
+}
+
 // ビタミン・ミネラル一覧
 function MicroNutrientGrid({ records }: { records: MealRecord[] }) {
   const totals = useMemo(() => {
@@ -820,6 +889,9 @@ export default function GrowthPage() {
 
               {/* PFCバランス */}
               <PFCBar records={filteredMealRecords} />
+
+              {/* ビタミン・ミネラル達成率ドーナツ */}
+              <MicroScoreDonut records={filteredMealRecords} />
 
               {/* ビタミン・ミネラル */}
               <div>

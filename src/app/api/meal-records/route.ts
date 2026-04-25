@@ -140,3 +140,77 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ record: data })
 }
+
+// 食事記録を更新
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) {
+    return NextResponse.json({ error: 'id is required' }, { status: 400 })
+  }
+
+  const body = await req.json()
+  const { foodName, calories, protein, carbs, fat, notes } = body
+
+  if (!foodName?.trim()) {
+    return NextResponse.json({ error: 'foodName は必須です' }, { status: 400 })
+  }
+
+  const parseNum = (v: unknown) => (v != null && v !== '' ? parseFloat(String(v)) : null)
+
+  const supabase = createServiceClient()
+
+  const { data, error } = await supabase
+    .from('meal_records')
+    .update({
+      food_name: foodName.trim(),
+      calories:  parseNum(calories),
+      protein:   parseNum(protein),
+      carbs:     parseNum(carbs),
+      fat:       parseNum(fat),
+      notes:     notes?.trim() || null,
+    })
+    .eq('id', id)
+    .select(SELECT_COLS)
+    .single()
+
+  if (error) {
+    console.error('[PATCH /api/meal-records]', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ record: data })
+}
+
+// 食事記録を削除
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) {
+    return NextResponse.json({ error: 'id is required' }, { status: 400 })
+  }
+
+  const supabase = createServiceClient()
+
+  const { error } = await supabase
+    .from('meal_records')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('[DELETE /api/meal-records]', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ success: true })
+}
