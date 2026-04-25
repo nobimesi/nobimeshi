@@ -376,10 +376,25 @@ const CATEGORY_DEFAULTS: Record<string, MicroMap> = {
   },
 }
 
-function detectCategory(foodName: string): keyof typeof CATEGORY_DEFAULTS {
-  const n = foodName.toLowerCase()
+/**
+ * マッチング専用の正規化。
+ * 「青汁（子ども向け1人前・約100ml）(1個)」→「青汁」のように
+ * 括弧内の修飾語・量表記を除去してコア食品名だけを返す。
+ * これにより「野菜炒め（にんじん・玉ねぎ入り）」のような複合名で
+ * 括弧内のキーワードが誤マッチするのを防ぐ。
+ */
+function normalizeForMatch(foodName: string): string {
+  return foodName
+    .replace(/[（(][^）)]*[）)]/g, '') // 全角・半角括弧の中身を除去
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function detectCategory(normalizedName: string): keyof typeof CATEGORY_DEFAULTS {
+  const n = normalizedName // すでに normalize 済みの小文字文字列を受け取る
   const has = (...words: string[]) => words.some(w => n.includes(w))
-  if (has('野菜','サラダ','葉','根菜','芋','いも','菜','草','ねぎ','もやし','きのこ','茸','たけのこ')) return 'vegetable'
+  if (has('野菜','サラダ','葉','根菜','芋','いも','菜','草','ねぎ','もやし','きのこ','茸','たけのこ','青汁')) return 'vegetable'
   if (has('肉','ミート','ビーフ','ポーク','チキン','ラム','ハム','ソーセージ','ウインナー','ベーコン','レバー')) return 'meat'
   if (has('魚','刺身','鮮','寿司','すし','えび','海老','いか','蛸','たこ','貝','あさり','しじみ','ほたて')) return 'fish'
   if (has('果物','フルーツ','ジュース','果汁','りんご','バナナ','みかん','いちご','ぶどう','もも','梨','メロン','スイカ')) return 'fruit'
@@ -393,15 +408,20 @@ function detectCategory(foodName: string): keyof typeof CATEGORY_DEFAULTS {
 
 // ── フォールバック適用（DB→カテゴリの2段階） ─────────────────────────────────
 function applyFallback(result: Record<string, number | null>, foodName: string): void {
-  const name = foodName.toLowerCase()
+  // マッチングには括弧内修飾語を除去した正規化名を使う
+  // 例: "野菜炒め（にんじん・玉ねぎ入り）" → "野菜炒め" でマッチ
+  //     "青汁（子ども向け1人前・約100ml）" → "青汁" でマッチ
+  const normalized = normalizeForMatch(foodName)
 
-  // Stage 1: DBマッチ
+  // Stage 1: DBマッチ（正規化名でキーワード照合）
   const dbMatch = FOOD_FALLBACK_DB.find(fb =>
-    fb.keywords.some(k => name.includes(k.toLowerCase()))
+    fb.keywords.some(k => normalized.includes(k.toLowerCase()))
   )
 
-  // Stage 2: カテゴリデフォルト
-  const catDefaults = CATEGORY_DEFAULTS[detectCategory(foodName)]
+  // Stage 2: カテゴリデフォルト（正規化名でカテゴリ検出）
+  const catDefaults = CATEGORY_DEFAULTS[detectCategory(normalized)]
+
+  console.log(`[food-nutrition] fallback: normalized="${normalized}" dbMatch=${dbMatch?.keywords[0] ?? 'none'} category=${detectCategory(normalized)}`)
 
   for (const key of MICRO_KEYS) {
     const val = result[key]
@@ -417,7 +437,8 @@ function applyFallback(result: Record<string, number | null>, foodName: string):
   }
 }
 
-// ── 全フィールドを確実に数値化 ────────────────────────────────────────────────
+// ── 全フィールドを確実に数値化（null/undefined/NaN → 0 の安全ガード）─────────
+// ※ 0 を補完するのは applyFallback の役割。この関数は型安全ガードのみ。
 function ensureAllNumeric(result: Record<string, number | null>): void {
   for (const key of MICRO_KEYS) {
     const v = result[key]
