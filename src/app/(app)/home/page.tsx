@@ -73,6 +73,55 @@ const MINERAL_DRI: { key: keyof MealRecord; label: string; unit: string; dri: nu
   { key: 'cobalt',     label: 'コバルト',     unit: 'μg', dri: 0.1  },
 ]
 
+// 年齢・性別別DRI目標値（日本人の食事摂取基準2020年版 参考値）
+// インデックス: 0=1-2歳, 1=3-5歳, 2=6-7歳, 3=8-9歳, 4=10-11歳, 5=12-14歳, 6=15-17歳, 7=18歳以上
+// 各エントリ: [男性, 女性]
+const DRI_BY_AGE: Partial<Record<keyof MealRecord, [number, number][]>> = {
+  vitamin_a:        [[300,250],[350,350],[400,400],[500,500],[600,600],[800,700],[900,650],[900,700]],
+  vitamin_d:        [[3.0,3.0],[3.5,3.5],[4.5,4.5],[5.0,5.0],[6.5,6.5],[8.0,8.0],[9.0,8.5],[8.5,8.5]],
+  vitamin_e:        [[3.0,3.0],[4.0,4.0],[5.0,5.0],[5.0,5.0],[5.5,5.5],[7.0,6.0],[7.5,6.0],[6.0,6.0]],
+  vitamin_k:        [[50,50],[60,60],[90,90],[110,110],[140,140],[170,150],[160,150],[150,150]],
+  vitamin_b1:       [[0.5,0.5],[0.7,0.7],[0.8,0.8],[1.0,0.9],[1.2,1.1],[1.4,1.3],[1.5,1.2],[1.4,1.1]],
+  vitamin_b2:       [[0.6,0.5],[0.8,0.8],[0.9,0.9],[1.1,1.0],[1.4,1.3],[1.6,1.4],[1.7,1.4],[1.6,1.2]],
+  vitamin_b6:       [[0.5,0.5],[0.6,0.6],[0.8,0.8],[0.9,0.9],[1.1,1.1],[1.4,1.3],[1.5,1.3],[1.4,1.1]],
+  vitamin_b12:      [[0.9,0.9],[1.1,1.1],[1.3,1.3],[1.6,1.6],[1.9,1.9],[2.4,2.4],[2.4,2.4],[2.4,2.4]],
+  vitamin_c:        [[40,40],[50,50],[60,60],[70,70],[85,85],[100,100],[100,100],[100,100]],
+  niacin:           [[5,5],[7,7],[9,9],[11,11],[13,13],[15,14],[17,13],[15,12]],
+  pantothenic_acid: [[3,3],[4,4],[4,4],[5,5],[6,5],[7,6],[7,6],[5,5]],
+  folate:           [[90,90],[110,110],[140,140],[160,160],[190,190],[240,240],[240,240],[240,240]],
+  biotin:           [[20,20],[25,25],[30,30],[35,35],[40,40],[50,50],[50,50],[50,50]],
+  calcium:          [[450,400],[600,550],[600,550],[650,750],[700,750],[1000,800],[800,650],[800,650]],
+  phosphorus:       [[500,500],[800,600],[800,600],[900,900],[1100,1000],[1200,1100],[1200,900],[1000,800]],
+  potassium:        [[900,900],[1100,1100],[1300,1200],[1500,1400],[1800,1700],[2400,2200],[2800,2600],[2600,2000]],
+  sodium:           [[600,600],[700,700],[800,750],[900,850],[1000,950],[1100,1000],[1100,1000],[1500,1500]],
+  magnesium:        [[70,70],[100,100],[130,130],[170,160],[210,220],[290,290],[360,310],[370,290]],
+  iron:             [[4.5,4.5],[5.5,5.0],[5.5,5.5],[7.0,7.0],[8.5,8.5],[10.0,10.0],[10.0,10.5],[7.5,10.5]],
+  zinc:             [[3,3],[4,4],[5,5],[6,6],[7,7],[9,8],[10,8],[11,8]],
+  copper:           [[0.3,0.3],[0.4,0.4],[0.5,0.5],[0.5,0.5],[0.6,0.6],[0.8,0.7],[1.0,0.8],[0.9,0.7]],
+  manganese:        [[1.5,1.5],[1.5,1.5],[2.0,2.0],[2.5,2.5],[3.0,3.0],[3.5,3.0],[4.0,3.5],[4.0,3.5]],
+  iodine:           [[50,50],[60,60],[90,90],[90,90],[110,110],[140,140],[140,140],[130,130]],
+  selenium:         [[15,15],[20,20],[20,20],[25,25],[30,30],[40,35],[45,40],[30,25]],
+  molybdenum:       [[10,10],[10,10],[15,15],[15,15],[20,20],[25,25],[30,25],[30,25]],
+  sulfur:           [[700,700],[700,700],[700,700],[700,700],[700,700],[700,700],[700,700],[700,700]],
+  chlorine:         [[2000,2000],[2000,2000],[2000,2000],[2000,2000],[2000,2000],[2000,2000],[2000,2000],[2000,2000]],
+  chromium:         [[10,10],[10,10],[10,10],[10,10],[10,10],[10,10],[10,10],[10,10]],
+  cobalt:           [[0.1,0.1],[0.1,0.1],[0.1,0.1],[0.1,0.1],[0.1,0.1],[0.1,0.1],[0.1,0.1],[0.1,0.1]],
+}
+
+function getAgeDri(key: keyof MealRecord, age: number, isFemale: boolean): number {
+  const bracket = age <= 2 ? 0 : age <= 5 ? 1 : age <= 7 ? 2 : age <= 9 ? 3 : age <= 11 ? 4 : age <= 14 ? 5 : age <= 17 ? 6 : 7
+  const row = DRI_BY_AGE[key]
+  if (!row) return 0
+  return row[bracket][isFemale ? 1 : 0]
+}
+
+function fmtNum(v: number): string {
+  if (v <= 0) return '0'
+  if (v < 1) return String(Math.round(v * 100) / 100)
+  if (v < 100) return String(Math.round(v * 10) / 10)
+  return String(Math.round(v))
+}
+
 /** ビタミンまたはミネラルの平均DRI達成率（0〜100）を返す */
 function calcMicroScore(records: MealRecord[], driList: { key: keyof MealRecord; dri: number }[]): number {
   let score = 0
@@ -184,9 +233,10 @@ function NutritionBar({ label, unit, bg, value, max, onClick }: {
 }
 
 function MicroDetailModal({
-  type, records, onClose,
+  type, records, onClose, age, isFemale,
 }: {
   type: 'vitamin' | 'mineral'; records: MealRecord[]; onClose: () => void
+  age: number; isFemale: boolean
 }) {
   const dris = type === 'vitamin' ? VITAMIN_DRI : MINERAL_DRI
   const title = type === 'vitamin' ? 'ビタミン詳細（13種）' : 'ミネラル詳細（16種）'
@@ -202,31 +252,33 @@ function MicroDetailModal({
           </button>
         </div>
         <div className="overflow-y-auto px-6 py-3 flex flex-col">
-          {dris.map(({ key, label, unit, dri }) => {
+          {dris.map(({ key, label, unit }) => {
+            const goal = getAgeDri(key, age, isFemale)
             const total = records.reduce((s, r) => s + (Number(r[key]) || 0), 0)
-            const pct = dri > 0 ? Math.min(100, Math.round((total / dri) * 100)) : 0
+            const pct = goal > 0 ? Math.min(100, Math.round((total / goal) * 100)) : 0
             const hasData = total > 0
             const barColor = pct >= 80 ? 'bg-green-400' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-300'
-            const display = total < 10
-              ? (Math.round(total * 100) / 100).toString()
-              : total < 100
-              ? (Math.round(total * 10) / 10).toString()
-              : Math.round(total).toString()
             return (
               <div key={key as string} className="flex items-center gap-2 py-2 border-b border-gray-50 last:border-0">
                 <span className="text-xs text-gray-600 w-24 shrink-0">{label}</span>
                 <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   {hasData && <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />}
                 </div>
-                <div className="text-right w-20 shrink-0">
-                  <span className="text-xs font-medium text-gray-700">{hasData ? `${display}${unit}` : '–'}</span>
-                  {hasData && <span className="text-xs text-gray-400 ml-1">({pct}%)</span>}
+                <div className="text-right w-28 shrink-0">
+                  <span className="text-xs font-medium text-gray-700">
+                    {hasData ? fmtNum(total) : '–'}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {unit} / {fmtNum(goal)}{unit}
+                  </span>
                 </div>
               </div>
             )
           })}
         </div>
-        <p className="text-xs text-gray-300 text-center pb-4 pt-1 shrink-0">※ 6〜7歳男性基準（参考値）</p>
+        <p className="text-xs text-gray-300 text-center pb-4 pt-1 shrink-0">
+          ※ {age}歳{isFemale ? '女児' : '男児'}基準（参考値・食事摂取基準2020年版）
+        </p>
       </div>
     </>
   )
@@ -432,6 +484,8 @@ export default function HomePage() {
   const isToday = selectedDate.toDateString() === new Date().toDateString()
   const child = children[selectedChild]
   const localDateStr = toLocalDateStr(selectedDate)
+  const childAge = child ? calcAge(child.birth_date) : 6
+  const childIsFemale = child?.gender === '女の子'
 
   // 栄養素合計
   const totals = {
@@ -617,6 +671,8 @@ export default function HomePage() {
           type={microModal}
           records={mealRecords}
           onClose={() => setMicroModal(null)}
+          age={childAge}
+          isFemale={childIsFemale}
         />
       )}
 
