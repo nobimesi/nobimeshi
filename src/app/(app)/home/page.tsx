@@ -393,6 +393,117 @@ function EditMealModal({
   )
 }
 
+// たんぱく質推奨量（日本人食事摂取基準2020年版）[男性, 女性] g/日
+const PROTEIN_GOAL: [number, number][] = [
+  [20,20],[25,25],[30,30],[40,40],[45,45],[60,55],[65,55],[65,50]
+]
+function getProteinGoal(age: number, isFemale: boolean): number {
+  const idx = age<=2?0:age<=5?1:age<=7?2:age<=9?3:age<=11?4:age<=14?5:age<=17?6:7
+  return PROTEIN_GOAL[idx][isFemale?1:0]
+}
+
+// ルールベースのアドバイス生成（最大2件、優先度順）
+function generateAdvice(
+  totals: { calories: number; protein: number; carbs: number; fat: number },
+  mealRecords: MealRecord[],
+  kcalPct: number,
+  childAge: number,
+  childIsFemale: boolean,
+  childName: string,
+): string[] {
+  const name = childName || 'お子さん'
+
+  // カロリーがほぼゼロなら記録を促すだけ
+  if (kcalPct < 10) {
+    return [`食事を記録すると、${name}に合ったアドバイスをお届けします📝`]
+  }
+
+  const getTotal = (key: keyof MealRecord) =>
+    mealRecords.reduce((s, r) => s + (Number(r[key]) || 0), 0)
+
+  const driPct = (key: keyof MealRecord) => {
+    const goal = getAgeDri(key, childAge, childIsFemale)
+    return goal > 0 ? (getTotal(key) / goal) * 100 : 100
+  }
+
+  const issues: { priority: number; msg: string }[] = []
+
+  // ── カロリーオーバー ──
+  if (kcalPct > 115) {
+    issues.push({ priority: 1, msg: `カロリーが目標を超えています。揚げ物や甘い飲み物を少し控えて、野菜や魚を中心にしてみましょう🥗` })
+  }
+
+  // ── たんぱく質（筋肉・免疫）──
+  const proteinGoal = getProteinGoal(childAge, childIsFemale)
+  const proteinPct = proteinGoal > 0 ? (totals.protein / proteinGoal) * 100 : 100
+  if (proteinPct < 55) {
+    issues.push({ priority: 2, msg: `たんぱく質が少なめです。お肉・魚・卵・豆腐を取り入れると、${name}の筋肉と免疫力がアップします💪` })
+  }
+
+  // ── カルシウム（骨・身長）──
+  const calcPct = driPct('calcium')
+  if (calcPct < 55) {
+    issues.push({ priority: 3, msg: `カルシウムが不足しています。${name}の骨や身長のために、牛乳・ヨーグルト・チーズ・小魚をプラスしてみて🦴` })
+  }
+
+  // ── 鉄（エネルギー・血液）──
+  const ironPct = driPct('iron')
+  if (ironPct < 50) {
+    issues.push({ priority: 4, msg: `鉄が少なめです。赤身のお肉・ほうれん草・大豆製品で元気をチャージしましょう🥩` })
+  }
+
+  // ── ビタミンD（カルシウム吸収サポート）──
+  const vitDPct = driPct('vitamin_d')
+  if (vitDPct < 50 && calcPct < 80) {
+    issues.push({ priority: 5, msg: `ビタミンDを補うとカルシウムの吸収がアップ！鮭・しらす・きのこ類がおすすめです☀️` })
+  }
+
+  // ── 亜鉛（免疫・成長）──
+  const zincPct = driPct('zinc')
+  if (zincPct < 50) {
+    issues.push({ priority: 6, msg: `亜鉛が不足しています。${name}の免疫力と成長のために、赤身肉・豆類・ナッツを意識してみて🛡️` })
+  }
+
+  // ── ビタミンA（目・粘膜・免疫）──
+  const vitAPct = driPct('vitamin_a')
+  if (vitAPct < 45) {
+    issues.push({ priority: 7, msg: `ビタミンAが少なめ。にんじん・ほうれん草・かぼちゃなど緑黄色野菜を一品加えましょう🥕` })
+  }
+
+  // ── ビタミンC（抗酸化・鉄吸収サポート）──
+  const vitCPct = driPct('vitamin_c')
+  if (vitCPct < 45) {
+    issues.push({ priority: 8, msg: `ビタミンCが不足しています。野菜や果物をもう一品加えると鉄の吸収もアップします🍊` })
+  }
+
+  // ── 脂質バランス ──
+  if (totals.calories > 300) {
+    const fatKcalRatio = (totals.fat * 9) / totals.calories * 100
+    if (fatKcalRatio > 35) {
+      issues.push({ priority: 9, msg: `脂質が多めです。揚げ物を減らして、蒸し料理や焼き物に切り替えてみましょう🥦` })
+    }
+  }
+
+  // 優先度順に最大2件
+  issues.sort((a, b) => a.priority - b.priority)
+  if (issues.length > 0) {
+    return issues.slice(0, 2).map(i => i.msg)
+  }
+
+  // ── ポジティブフィードバック ──
+  const allGood = proteinPct >= 75 && calcPct >= 75 && vitDPct >= 60
+  if (kcalPct >= 80 && kcalPct <= 115 && allGood) {
+    return [`今日は栄養バランスが優秀です！たんぱく質もカルシウムもしっかり摂れていて、${name}の成長をしっかり支えられていますね✨`]
+  }
+  if (kcalPct >= 80 && kcalPct <= 115) {
+    return [`カロリーは目標通りです！引き続きいろいろな食品をバランスよく食べさせてあげましょう🌟`]
+  }
+  if (kcalPct < 80) {
+    return [`まだ目標の${Math.round(kcalPct)}%です。残りの食事でしっかりエネルギーと栄養を補いましょう🍚`]
+  }
+  return [`バランスよく食べられています！${name}の体がぐんぐん成長しますね🌱`]
+}
+
 function MealCard({
   mealType, foods, dateStr, onEdit,
 }: {
@@ -495,11 +606,14 @@ export default function HomePage() {
     fat:      mealRecords.reduce((s, r) => s + (r.fat ?? 0), 0),
   }
   const targetKcal = NUTRIENT_TARGETS[0].max
-  const kcalPct = Math.min(Math.round((totals.calories / targetKcal) * 100), 100)
+  const kcalRaw = Math.round((totals.calories / targetKcal) * 100)
+  const kcalPct = Math.min(kcalRaw, 100) // 表示用（上限100%）
 
   // ビタミン・ミネラルの平均DRI達成率（%）
   const vitaminScore = calcMicroScore(mealRecords, VITAMIN_DRI)
   const mineralScore = calcMicroScore(mealRecords, MINERAL_DRI)
+
+  const advice = generateAdvice(totals, mealRecords, kcalRaw, childAge, childIsFemale, child?.name ?? '')
 
   const handleEditSaved = () => {
     const c = children[selectedChild]
@@ -652,13 +766,12 @@ export default function HomePage() {
                 <Flame className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-xs font-bold text-orange-500 mb-1">今日の栄養</p>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {kcalPct >= 80
-                    ? `目標の${kcalPct}%を達成しています！バランスよく食べられていますね。`
-                    : `今日はまだ目標の${kcalPct}%です。夕食でしっかり栄養を補いましょう。`
-                  }
-                </p>
+                <p className="text-xs font-bold text-orange-500 mb-1.5">今日の栄養アドバイス</p>
+                <div className="flex flex-col gap-1.5">
+                  {advice.map((line, i) => (
+                    <p key={i} className="text-sm text-gray-700 leading-relaxed">{line}</p>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
