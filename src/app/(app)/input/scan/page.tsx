@@ -3,9 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Camera, Upload, ArrowLeft, Loader2,
-  SwitchCamera, X,
+  SwitchCamera, X, Check,
 } from 'lucide-react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 interface RecognizedFood {
@@ -15,6 +14,27 @@ interface RecognizedFood {
   protein: number
   carbs: number
   fat: number
+  vitamin_c?: number
+  calcium?: number
+  iron?: number
+  vitamin_d?: number
+}
+
+interface Child {
+  id: string
+  name: string
+  avatar: string
+}
+
+const MEAL_TYPES = [
+  { key: 'breakfast' as const, label: '朝食', icon: '🌅' },
+  { key: 'lunch'     as const, label: '昼食', icon: '☀️' },
+  { key: 'dinner'    as const, label: '夕食', icon: '🌙' },
+  { key: 'snack'     as const, label: 'おやつ', icon: '🍪' },
+]
+
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 // カメラオーバーレイ（fullscreen）
@@ -47,7 +67,6 @@ function CameraOverlay({
         videoRef.current.srcObject = stream
       }
     } catch {
-      // エラー時はオーバーレイを閉じる（呼び出し元でフォールバック）
       onClose()
     }
   }, [onClose])
@@ -87,51 +106,30 @@ function CameraOverlay({
 
   return (
     <div className="fixed inset-0 bg-black z-[100] flex flex-col">
-      {/* シャッターフラッシュ */}
       {flash && <div className="absolute inset-0 bg-white z-10 pointer-events-none opacity-80" />}
-
-      {/* 上部：閉じる・タイトル・カメラ切替 */}
       <div className="relative z-20 flex items-center justify-between px-4 pt-14 pb-3">
-        <button
-          onClick={onClose}
-          className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-        >
+        <button onClick={onClose} className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
           <X className="w-5 h-5 text-white" />
         </button>
         <span className="text-white text-sm font-semibold">食事を撮影</span>
-        <button
-          onClick={toggleFacing}
-          className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-        >
+        <button onClick={toggleFacing} className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
           <SwitchCamera className="w-5 h-5 text-white" />
         </button>
       </div>
-
-      {/* カメラ映像 */}
       <div className="flex-1 relative overflow-hidden">
         <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
+          ref={videoRef} autoPlay playsInline muted
           onCanPlay={() => setReady(true)}
           className={`w-full h-full object-cover ${facingMode === 'user' ? '[transform:scaleX(-1)]' : ''}`}
         />
-
-        {/* ガイド枠 */}
         {ready && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="relative w-64 h-64 sm:w-80 sm:h-80">
-              {/* 四隅のマーカー */}
-              {[
-                'top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-xl',
+              {['top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-xl',
                 'top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-xl',
                 'bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-xl',
                 'bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-xl',
-              ].map((cls, i) => (
-                <div key={i} className={`absolute w-8 h-8 border-white ${cls}`} />
-              ))}
-              {/* 半透明オーバーレイ（外側を暗くする） */}
+              ].map((cls, i) => <div key={i} className={`absolute w-8 h-8 border-white ${cls}`} />)}
             </div>
           </div>
         )}
@@ -146,31 +144,18 @@ function CameraOverlay({
           </p>
         )}
       </div>
-
-      {/* 下部：シャッター・ライブラリ */}
       <div className="relative z-20 flex items-center justify-center gap-14 px-8 py-8">
-        {/* 空白（左バランス用） */}
         <div className="w-14 h-14" />
-
-        {/* シャッター */}
-        <button
-          onClick={capture}
-          disabled={!ready}
-          className="w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
-        >
+        <button onClick={capture} disabled={!ready}
+          className="w-20 h-20 rounded-full bg-white shadow-2xl flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50">
           <div className="w-[62px] h-[62px] rounded-full border-[3px] border-gray-300" />
         </button>
-
-        {/* カメラ切替（右） */}
-        <button
-          onClick={toggleFacing}
-          className="w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex flex-col items-center justify-center gap-1"
-        >
+        <button onClick={toggleFacing}
+          className="w-14 h-14 rounded-2xl bg-white/20 border border-white/30 flex flex-col items-center justify-center gap-1">
           <SwitchCamera className="w-5 h-5 text-white" />
           <span className="text-white/70 text-[10px]">切替</span>
         </button>
       </div>
-
       <canvas ref={canvasRef} className="hidden" />
     </div>
   )
@@ -183,11 +168,33 @@ export default function ScanPage() {
 
   const [showCamera, setShowCamera] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [imageBase64, setImageBase64] = useState<string | null>(null)
+  const [mediaType, setMediaType] = useState<string>('image/jpeg')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<RecognizedFood[] | null>(null)
+  const [analyzeError, setAnalyzeError] = useState('')
   const [cameraError, setCameraError] = useState('')
 
-  // ライブカメラ起動
+  const [children, setChildren] = useState<Child[]>([])
+  const [selectedChildIndex, setSelectedChildIndex] = useState(0)
+  const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch')
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/children')
+      .then(r => r.json())
+      .then(d => setChildren(d.children ?? []))
+      .catch(console.error)
+
+    // 時刻に応じてデフォルト食事タイプを設定
+    const h = new Date().getHours()
+    if (h < 10) setMealType('breakfast')
+    else if (h < 14) setMealType('lunch')
+    else if (h < 17) setMealType('snack')
+    else setMealType('dinner')
+  }, [])
+
   const handleOpenCamera = async () => {
     setCameraError('')
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -195,7 +202,6 @@ export default function ScanPage() {
       return
     }
     try {
-      // 権限チェック（実際のストリームはCameraOverlay内で取得）
       await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         .then(s => s.getTracks().forEach(t => t.stop()))
       setShowCamera(true)
@@ -209,78 +215,144 @@ export default function ScanPage() {
     }
   }
 
-  // カメラキャプチャ完了
   const handleCapture = (dataUrl: string) => {
     setShowCamera(false)
     setPreview(dataUrl)
+    setImageBase64(dataUrl.split(',')[1])
+    setMediaType('image/jpeg')
     setResult(null)
+    setAnalyzeError('')
   }
 
-  // ファイル選択（ライブラリ or ネイティブカメラ）
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setPreview(URL.createObjectURL(file))
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string
+      setPreview(dataUrl)
+      setImageBase64(dataUrl.split(',')[1])
+      setMediaType(file.type || 'image/jpeg')
+    }
+    reader.readAsDataURL(file)
     setResult(null)
+    setAnalyzeError('')
     e.target.value = ''
   }
 
-  // リセット
   const reset = () => {
     setPreview(null)
+    setImageBase64(null)
     setResult(null)
     setCameraError('')
+    setAnalyzeError('')
+    setSaveError('')
   }
 
-  // AI解析（ダミー）
   const handleAnalyze = async () => {
-    if (!preview) return
+    if (!imageBase64) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1800))
-    setResult([
-      { name: 'ごはん（茶碗1杯）', amount: '150g', calories: 252, protein: 3.8, carbs: 55.7, fat: 0.5 },
-      { name: '味噌汁（わかめ）',  amount: '1杯',  calories: 35,  protein: 2.4, carbs: 2.8,  fat: 0.9 },
-      { name: '焼き鮭',           amount: '80g',  calories: 115, protein: 17.8, carbs: 0.1,  fat: 4.8 },
-    ])
-    setLoading(false)
+    setAnalyzeError('')
+    try {
+      const res = await fetch('/api/ai-food-recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mediaType }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
+      const foods: Array<{
+        foodName: string; calories: number; protein: number; carbs: number; fat: number
+        portion: string; vitamin_c?: number; calcium?: number; iron?: number; vitamin_d?: number
+      }> = data.foods ?? []
+      if (foods.length === 0) throw new Error('食品を認識できませんでした。別の角度で撮影してみてください。')
+      setResult(foods.map(f => ({
+        name: f.foodName,
+        amount: f.portion ?? '',
+        calories: f.calories ?? 0,
+        protein: f.protein ?? 0,
+        carbs: f.carbs ?? 0,
+        fat: f.fat ?? 0,
+        vitamin_c: f.vitamin_c,
+        calcium: f.calcium,
+        iron: f.iron,
+        vitamin_d: f.vitamin_d,
+      })))
+    } catch (e) {
+      setAnalyzeError(e instanceof Error ? e.message : 'エラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
   }
+
+  const handleSave = async () => {
+    if (!result || children.length === 0) return
+    setSaving(true)
+    setSaveError('')
+    const child = children[selectedChildIndex]
+    const today = toLocalDateStr(new Date())
+    try {
+      const responses = await Promise.all(
+        result.map(food =>
+          fetch('/api/meal-records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              childId: child.id,
+              mealType,
+              foodName: food.name,
+              calories: food.calories || null,
+              protein: food.protein || null,
+              carbs: food.carbs || null,
+              fat: food.fat || null,
+              recordedAt: `${today}T12:00:00.000Z`,
+              vitamin_c: food.vitamin_c ?? null,
+              calcium: food.calcium ?? null,
+              iron: food.iron ?? null,
+              vitamin_d: food.vitamin_d ?? null,
+            }),
+          })
+        )
+      )
+      const failed = responses.find(r => !r.ok)
+      if (failed) throw new Error('保存に失敗しました')
+      router.push('/home')
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const totalCalories = result?.reduce((s, f) => s + (f.calories ?? 0), 0) ?? 0
 
   return (
     <>
-      {/* カメラオーバーレイ（fullscreen portal的に配置） */}
       {showCamera && (
-        <CameraOverlay
-          onCapture={handleCapture}
-          onClose={() => setShowCamera(false)}
-        />
+        <CameraOverlay onCapture={handleCapture} onClose={() => setShowCamera(false)} />
       )}
 
       <div className="flex flex-col min-h-screen">
         {/* ヘッダー */}
         <div className="flex items-center gap-3 px-4 pt-12 pb-4">
-          <Link href="/home" className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100">
+          <button onClick={() => router.back()} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </Link>
+          </button>
           <h1 className="text-lg font-bold text-gray-800">食べ物をスキャン</h1>
         </div>
 
-        <div className="px-4 flex flex-col gap-4">
+        <div className="px-4 flex flex-col gap-4 pb-8">
 
-          {/* ── 画像未選択：初期状態 ── */}
+          {/* 画像未選択：初期状態 */}
           {!preview && (
             <>
-              {/* カメラエラー */}
               {cameraError && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-2xl px-4 py-3 text-xs text-yellow-700">
                   {cameraError}
                 </div>
               )}
-
-              {/* メインエリア：ライブカメラ起動 */}
-              <button
-                onClick={handleOpenCamera}
-                className="w-full h-52 border-2 border-dashed border-orange-200 rounded-2xl flex flex-col items-center justify-center gap-3 bg-orange-50 active:bg-orange-100 transition-colors"
-              >
+              <button onClick={handleOpenCamera}
+                className="w-full h-52 border-2 border-dashed border-orange-200 rounded-2xl flex flex-col items-center justify-center gap-3 bg-orange-50 active:bg-orange-100 transition-colors">
                 <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center">
                   <Camera className="w-7 h-7 text-orange-500" />
                 </div>
@@ -289,32 +361,23 @@ export default function ScanPage() {
                   <p className="text-xs text-gray-400 mt-1">ライブカメラを起動して食事を撮影</p>
                 </div>
               </button>
-
-              {/* ライブラリから選択 */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-2xl text-sm text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-              >
+              <button onClick={() => fileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-2xl text-sm text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition-colors">
                 <Upload className="w-4 h-4" />
                 ライブラリから選択
               </button>
             </>
           )}
 
-          {/* ── 画像選択済み：プレビュー ── */}
+          {/* 画像選択済み */}
           {preview && (
             <>
               <div className="relative rounded-2xl overflow-hidden">
-                <img
-                  src={preview}
-                  alt="食事の写真"
-                  className="w-full h-56 object-cover"
-                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="食事の写真" className="w-full h-56 object-cover" />
                 {!loading && !result && (
-                  <button
-                    onClick={reset}
-                    className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center"
-                  >
+                  <button onClick={reset}
+                    className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full flex items-center justify-center">
                     <X className="w-4 h-4 text-white" />
                   </button>
                 )}
@@ -322,40 +385,41 @@ export default function ScanPage() {
 
               {/* 解析ボタン */}
               {!result && (
-                <button
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      AI解析中...
-                    </>
-                  ) : (
-                    'AIで解析する'
+                <>
+                  <button onClick={handleAnalyze} disabled={loading}
+                    className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60">
+                    {loading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" />AI解析中（少々お待ちください）...</>
+                    ) : (
+                      'AIで解析する'
+                    )}
+                  </button>
+                  {analyzeError && (
+                    <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl px-4 py-3">{analyzeError}</p>
                   )}
-                </button>
+                </>
               )}
 
               {/* 解析結果 */}
               {result && (
                 <div className="flex flex-col gap-3">
+                  {/* 認識結果ヘッダー */}
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-700">認識された食べ物</span>
-                    <span className="bg-green-100 text-green-600 text-xs px-2 py-0.5 rounded-full">AI解析完了</span>
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span className="text-sm font-semibold text-gray-700">認識された食べ物（{result.length}品目）</span>
+                    <span className="ml-auto text-xs font-bold text-orange-500">{Math.round(totalCalories)}kcal</span>
                   </div>
 
                   {result.map((food, i) => (
                     <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between mb-2">
                         <div>
-                          <p className="text-sm font-medium text-gray-800">{food.name}</p>
+                          <p className="text-sm font-semibold text-gray-800">{food.name}</p>
                           <p className="text-xs text-gray-400">{food.amount}</p>
                         </div>
-                        <span className="text-sm font-bold text-orange-500">{food.calories}kcal</span>
+                        <span className="text-sm font-bold text-orange-500 shrink-0 ml-2">{food.calories}kcal</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mt-3">
+                      <div className="grid grid-cols-3 gap-2">
                         <div className="bg-blue-50 rounded-lg px-2 py-1.5 text-center">
                           <p className="text-xs text-gray-400">P</p>
                           <p className="text-xs font-medium text-gray-700">{food.protein}g</p>
@@ -372,22 +436,59 @@ export default function ScanPage() {
                     </div>
                   ))}
 
-                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500">
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-400">
                     ※ AI解析の結果は目安です。実際の栄養素は食材・調理法により異なります。
                   </div>
 
-                  <div className="flex gap-3 pb-4">
-                    <button
-                      onClick={reset}
-                      className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium"
-                    >
+                  {/* 子供選択 */}
+                  {children.length > 0 && (
+                    <div className="bg-white border border-gray-100 rounded-xl p-3">
+                      <p className="text-xs font-semibold text-gray-500 mb-2">記録する子供</p>
+                      <div className="flex gap-2 overflow-x-auto">
+                        {children.map((c, i) => (
+                          <button key={c.id} onClick={() => setSelectedChildIndex(i)}
+                            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                              selectedChildIndex === i
+                                ? 'bg-orange-500 text-white border-orange-500'
+                                : 'bg-gray-50 text-gray-500 border-gray-200'
+                            }`}>
+                            <span>{c.avatar}</span>{c.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 食事タイプ選択 */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-2">食事の種類</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {MEAL_TYPES.map(m => (
+                        <button key={m.key} onClick={() => setMealType(m.key)}
+                          className={`py-2.5 rounded-xl flex flex-col items-center gap-0.5 text-xs font-semibold border transition-all ${
+                            mealType === m.key
+                              ? 'bg-orange-500 border-orange-500 text-white'
+                              : 'bg-white border-gray-200 text-gray-500'
+                          }`}>
+                          <span className="text-base">{m.icon}</span>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {saveError && (
+                    <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl px-4 py-3">{saveError}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button onClick={reset}
+                      className="flex-1 py-3 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium active:scale-95 transition-transform">
                       撮り直す
                     </button>
-                    <button
-                      onClick={() => router.push('/home')}
-                      className="flex-1 py-3 bg-orange-500 text-white rounded-xl text-sm font-medium shadow-sm shadow-orange-200 active:scale-95 transition-transform"
-                    >
-                      記録する
+                    <button onClick={handleSave} disabled={saving || children.length === 0}
+                      className="flex-1 py-3 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-sm shadow-orange-200 active:scale-95 transition-transform disabled:opacity-60 flex items-center justify-center gap-2">
+                      {saving ? <><Loader2 className="w-4 h-4 animate-spin" />保存中...</> : '記録する'}
                     </button>
                   </div>
                 </div>
@@ -396,14 +497,7 @@ export default function ScanPage() {
           )}
         </div>
 
-        {/* 隠しinput（ライブラリ選択） */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
       </div>
     </>
   )

@@ -19,12 +19,19 @@ interface Restriction {
   restriction_type: string
 }
 
+interface GrowthRecord {
+  height: number | null
+  weight: number | null
+}
+
 interface Recipe {
   name: string
   ingredients: string[]
   description: string
+  steps?: string[]
   nutrients: { label: string; value: string }[]
   cookTime: string
+  growthPoint?: string
 }
 
 function getAge(birthDate: string) {
@@ -40,12 +47,13 @@ export default function RecipeSuggestPage() {
   const [children, setChildren] = useState<Child[]>([])
   const [childIndex, setChildIndex] = useState(0)
   const [allergies, setAllergies] = useState<string[]>([])
+  const [growthRecord, setGrowthRecord] = useState<GrowthRecord | null>(null)
   const [ingredients, setIngredients] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [recipes, setRecipes] = useState<Recipe[] | null>(null)
+  const [error, setError] = useState('')
 
-  // 子供一覧を取得
   useEffect(() => {
     fetch('/api/children')
       .then(r => r.json())
@@ -53,20 +61,22 @@ export default function RecipeSuggestPage() {
       .catch(console.error)
   }, [])
 
-  // 子供が変わったらアレルギー情報を取得
   useEffect(() => {
     const child = children[childIndex]
     if (!child) return
     setAllergies([])
-    fetch(`/api/food-restrictions?childId=${child.id}`)
-      .then(r => r.json())
-      .then((d: { restrictions?: Restriction[] }) => {
-        const items = (d.restrictions ?? [])
-          .filter(r => r.restriction_type === 'allergy')
-          .map(r => r.food_name)
-        setAllergies(items)
-      })
-      .catch(console.error)
+    setGrowthRecord(null)
+    Promise.all([
+      fetch(`/api/food-restrictions?childId=${child.id}`).then(r => r.json()),
+      fetch(`/api/growth-records?childId=${child.id}`).then(r => r.json()),
+    ]).then(([restrictionData, growthData]) => {
+      const items = (restrictionData.restrictions ?? [])
+        .filter((r: Restriction) => r.restriction_type === 'allergy')
+        .map((r: Restriction) => r.food_name)
+      setAllergies(items)
+      const latest = growthData.records?.[0]
+      if (latest) setGrowthRecord({ height: latest.height, weight: latest.weight })
+    }).catch(console.error)
   }, [children, childIndex])
 
   const child = children[childIndex]
@@ -74,58 +84,42 @@ export default function RecipeSuggestPage() {
   const addIngredient = () => {
     const trimmed = input.trim()
     if (!trimmed || ingredients.includes(trimmed)) return
-    setIngredients((prev) => [...prev, trimmed])
+    setIngredients(prev => [...prev, trimmed])
     setInput('')
   }
 
   const removeIngredient = (name: string) => {
-    setIngredients((prev) => prev.filter((i) => i !== name))
+    setIngredients(prev => prev.filter(i => i !== name))
   }
 
   const handleSuggest = async () => {
     if (ingredients.length === 0) return
     setLoading(true)
-
-    // アレルギー情報を含むプロンプト（AI API実装時に使用）
-    const _prompt = [
-      `冷蔵庫の食材: ${ingredients.join('・')}`,
-      child
-        ? `対象: ${child.name}（${getAge(child.birth_date)}歳・${child.gender ?? ''}・活動量: ${child.activity_level ?? '普通'}）`
-        : '',
-      allergies.length > 0
-        ? `アレルギー（レシピに絶対使わないこと）: ${allergies.join('・')}`
-        : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    // TODO: POST /api/recipe-suggest にプロンプトを送信する
-    await new Promise((r) => setTimeout(r, 1500))
-    setRecipes([
-      {
-        name: '鮭と野菜の炒め物',
-        ingredients: ['鮭', 'ブロッコリー', 'パプリカ'],
-        description: 'カルシウム・鉄分・ビタミンCが豊富な栄養満点の一品。子供が食べやすい甘めの醤油味で仕上げます。',
-        nutrients: [
-          { label: 'カルシウム', value: '充分' },
-          { label: '鉄分', value: '充分' },
-          { label: 'ビタミンC', value: '豊富' },
-        ],
-        cookTime: '20分',
-      },
-      {
-        name: '鮭とほうれん草のパスタ',
-        ingredients: ['鮭', 'パスタ', 'ほうれん草'],
-        description: '鉄分と良質なたんぱく質がとれるメニュー。クリームソースベースで子供も食べやすい！',
-        nutrients: [
-          { label: 'たんぱく質', value: '豊富' },
-          { label: '鉄分', value: '充分' },
-          { label: '炭水化物', value: '適量' },
-        ],
-        cookTime: '25分',
-      },
-    ])
-    setLoading(false)
+    setError('')
+    setRecipes(null)
+    try {
+      const res = await fetch('/api/recipe-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ingredients,
+          childName: child?.name ?? '',
+          age: child ? getAge(child.birth_date) : null,
+          gender: child?.gender ?? '',
+          activity: child?.activity_level ?? '普通',
+          allergies,
+          height: growthRecord?.height ?? null,
+          weight: growthRecord?.weight ?? null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
+      setRecipes(data.recipes ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'エラーが発生しました')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -141,7 +135,7 @@ export default function RecipeSuggestPage() {
         <div className="bg-orange-50 rounded-2xl p-4 flex items-start gap-3">
           <Refrigerator className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
           <p className="text-sm text-gray-600 leading-relaxed">
-            冷蔵庫にある食材を入力してください。子供の年齢・栄養バランスを考慮したレシピを提案します。アレルギー食材は自動的に除外します。
+            冷蔵庫にある食材を入力してください。カルシウム・ビタミンD・鉄分など成長に必要な栄養素を意識したレシピを提案します。アレルギー食材は自動的に除外します。
           </p>
         </div>
 
@@ -152,16 +146,10 @@ export default function RecipeSuggestPage() {
             {children.length > 1 && (
               <div className="flex gap-2 mb-2 overflow-x-auto">
                 {children.map((c, i) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setChildIndex(i)}
+                  <button key={c.id} type="button" onClick={() => setChildIndex(i)}
                     className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      childIndex === i
-                        ? 'bg-orange-500 text-white border-orange-500'
-                        : 'bg-gray-50 text-gray-500 border-gray-200'
-                    }`}
-                  >
+                      childIndex === i ? 'bg-orange-500 text-white border-orange-500' : 'bg-gray-50 text-gray-500 border-gray-200'
+                    }`}>
                     <span>{c.avatar}</span>{c.name}
                   </button>
                 ))}
@@ -169,13 +157,22 @@ export default function RecipeSuggestPage() {
             )}
             {child && (
               <div className="flex items-center gap-2">
-                <span className="text-lg">{child.avatar}</span>
-                <p className="text-sm font-medium text-gray-700">
-                  {child.name}
-                  <span className="text-xs text-gray-400 ml-1">
-                    {getAge(child.birth_date)}歳{child.gender ? `・${child.gender}` : ''}
-                  </span>
-                </p>
+                <span className="text-xl">{child.avatar}</span>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    {child.name}
+                    <span className="text-xs text-gray-400 ml-1">
+                      {getAge(child.birth_date)}歳{child.gender ? `・${child.gender}` : ''}
+                    </span>
+                  </p>
+                  {growthRecord && (
+                    <p className="text-xs text-gray-400">
+                      {growthRecord.height && `${growthRecord.height}cm`}
+                      {growthRecord.height && growthRecord.weight && '・'}
+                      {growthRecord.weight && `${growthRecord.weight}kg`}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -183,20 +180,17 @@ export default function RecipeSuggestPage() {
 
         {/* 食材入力 */}
         <div>
-          <label className="text-sm text-gray-500 mb-2 block">冷蔵庫の食材</label>
+          <label className="text-sm font-medium text-gray-600 mb-2 block">冷蔵庫の食材</label>
           <div className="flex gap-2">
             <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addIngredient()}
-              placeholder="例: 鶏肉、にんじん..."
+              type="text" value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addIngredient()}
+              placeholder="例: 鶏肉、にんじん、ほうれん草..."
               className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
-            <button
-              onClick={addIngredient}
-              className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center active:scale-95 transition-transform"
-            >
+            <button onClick={addIngredient}
+              className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center active:scale-95 transition-transform">
               <Plus className="w-4 h-4 text-white" />
             </button>
           </div>
@@ -205,7 +199,7 @@ export default function RecipeSuggestPage() {
         {/* 食材タグ */}
         {ingredients.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {ingredients.map((ing) => (
+            {ingredients.map(ing => (
               <div key={ing} className="flex items-center gap-1 bg-orange-100 text-orange-700 px-3 py-1.5 rounded-full text-sm">
                 {ing}
                 <button onClick={() => removeIngredient(ing)}>
@@ -227,49 +221,81 @@ export default function RecipeSuggestPage() {
           </div>
         )}
 
-        <button
-          onClick={handleSuggest}
-          disabled={ingredients.length === 0 || loading}
-          className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60"
-        >
+        <button onClick={handleSuggest} disabled={ingredients.length === 0 || loading}
+          className="w-full bg-orange-500 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-sm shadow-orange-200 disabled:opacity-60">
           {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              AIがレシピを考え中...
-            </>
+            <><Loader2 className="w-4 h-4 animate-spin" />AIがレシピを考え中...</>
           ) : (
             'レシピを提案してもらう'
           )}
         </button>
 
+        {error && (
+          <p className="text-sm text-red-500 text-center bg-red-50 rounded-xl px-4 py-3">{error}</p>
+        )}
+
         {/* レシピ一覧 */}
         {recipes && (
-          <div className="flex flex-col gap-4">
-            <p className="text-sm font-semibold text-gray-700">おすすめレシピ</p>
+          <div className="flex flex-col gap-5">
+            <p className="text-sm font-semibold text-gray-700">おすすめレシピ（{recipes.length}品）</p>
             {recipes.map((recipe, i) => (
               <div key={i} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-gradient-to-r from-orange-50 to-amber-50 px-4 py-3 border-b border-orange-100">
-                  <div className="flex items-start justify-between">
-                    <h3 className="text-sm font-bold text-gray-800">{recipe.name}</h3>
-                    <span className="text-xs text-gray-400 shrink-0 ml-2">⏱️ {recipe.cookTime}</span>
+                {/* レシピ名ヘッダー — 大きく見やすく */}
+                <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white leading-tight">{recipe.name}</h3>
+                    <span className="text-xs text-orange-100 shrink-0 mt-1 bg-white/20 px-2 py-1 rounded-full">
+                      ⏱️ {recipe.cookTime}
+                    </span>
                   </div>
+                  {recipe.growthPoint && (
+                    <p className="text-xs text-orange-100 mt-1.5">🌱 {recipe.growthPoint}</p>
+                  )}
                 </div>
-                <div className="p-4">
-                  <p className="text-xs text-gray-500 leading-relaxed mb-3">{recipe.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {recipe.nutrients.map((n, j) => (
-                      <span key={j} className="bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-100">
-                        {n.label}: {n.value}
-                      </span>
-                    ))}
+
+                <div className="p-4 flex flex-col gap-3">
+                  {/* 説明 */}
+                  <p className="text-sm text-gray-600 leading-relaxed">{recipe.description}</p>
+
+                  {/* 栄養バッジ */}
+                  {recipe.nutrients.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {recipe.nutrients.map((n, j) => (
+                        <span key={j} className="bg-green-50 text-green-700 text-xs px-2.5 py-1 rounded-full border border-green-100 font-medium">
+                          ✓ {n.label}: {n.value}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 食材 */}
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1.5">食材</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {recipe.ingredients.map((ing, j) => (
+                        <span key={j} className="bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg">
+                          {ing}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {recipe.ingredients.map((ing, j) => (
-                      <span key={j} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-md">
-                        {ing}
-                      </span>
-                    ))}
-                  </div>
+
+                  {/* 作り方 */}
+                  {recipe.steps && recipe.steps.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5">作り方</p>
+                      <ol className="flex flex-col gap-1.5">
+                        {recipe.steps.map((step, j) => (
+                          <li key={j} className="flex items-start gap-2 text-sm text-gray-600">
+                            <span className="w-5 h-5 bg-orange-100 text-orange-600 rounded-full text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                              {j + 1}
+                            </span>
+                            {step}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

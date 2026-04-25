@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 256,
+    max_tokens: 512,
     messages: [
       {
         role: 'user',
@@ -31,7 +31,20 @@ export async function POST(req: NextRequest) {
   "protein": たんぱく質(g・小数第1位),
   "carbs": 炭水化物(g・小数第1位),
   "fat": 脂質(g・小数第1位),
-  "portion": "目安量（例: 1皿・200g）"
+  "portion": "目安量（例: 1皿・200g）",
+  "vitamin_a": ビタミンA(μg・整数・不明なら0),
+  "vitamin_d": ビタミンD(μg・小数第1位・不明なら0),
+  "vitamin_e": ビタミンE(mg・小数第1位・不明なら0),
+  "vitamin_c": ビタミンC(mg・整数・不明なら0),
+  "vitamin_b1": ビタミンB1(mg・小数第2位・不明なら0),
+  "vitamin_b2": ビタミンB2(mg・小数第2位・不明なら0),
+  "folate": 葉酸(μg・整数・不明なら0),
+  "calcium": カルシウム(mg・整数・不明なら0),
+  "iron": 鉄(mg・小数第1位・不明なら0),
+  "zinc": 亜鉛(mg・小数第1位・不明なら0),
+  "potassium": カリウム(mg・整数・不明なら0),
+  "magnesium": マグネシウム(mg・整数・不明なら0),
+  "sodium": ナトリウム(mg・整数・不明なら0)
 }
 食品として認識できない場合は全フィールドをnullにしてください。JSONのみ返してください。`,
       },

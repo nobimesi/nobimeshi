@@ -599,6 +599,7 @@ function SearchTab({
         protein:  r.protein  != null ? String(r.protein)  : '',
         carbs:    r.carbs    != null ? String(r.carbs)    : '',
         fat:      r.fat      != null ? String(r.fat)      : '',
+        micro:    pickMicro(r as Record<string, unknown>),
       })
     } catch (e) {
       setAiError(e instanceof Error ? e.message : 'エラーが発生しました')
@@ -999,7 +1000,7 @@ function ManualTab({
 }
 
 // ---- AI 認識タブ ----
-function AiTab({ onResult }: { onResult: (f: NutrientForm) => void }) {
+function AiTab({ onResult, onAddItems }: { onResult: (f: NutrientForm) => void; onAddItems: (items: NutrientForm[]) => void }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [base64, setBase64] = useState<string | null>(null)
   const [mediaType, setMediaType] = useState('image/jpeg')
@@ -1031,15 +1032,22 @@ function AiTab({ onResult }: { onResult: (f: NutrientForm) => void }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
-      const r = data.result
-      if (!r?.foodName) throw new Error('食品を認識できませんでした')
-      onResult({
-        foodName: r.foodName,
-        calories: r.calories != null ? String(r.calories) : '',
-        protein:  r.protein  != null ? String(r.protein)  : '',
-        carbs:    r.carbs    != null ? String(r.carbs)    : '',
-        fat:      r.fat      != null ? String(r.fat)      : '',
-      })
+      const foods: Array<{ foodName: string; calories: number; protein: number; carbs: number; fat: number }> = data.foods ?? []
+      if (foods.length === 0) throw new Error('食品を認識できませんでした')
+      // 複数品目認識されたらすべて追加、1品目は手入力タブで確認できるよう onResult へ
+      const mapped = foods.map(f => ({
+        foodName: f.foodName,
+        calories: f.calories != null ? String(f.calories) : '',
+        protein:  f.protein  != null ? String(f.protein)  : '',
+        carbs:    f.carbs    != null ? String(f.carbs)    : '',
+        fat:      f.fat      != null ? String(f.fat)      : '',
+        micro:    pickMicro(f as unknown as Record<string, unknown>),
+      }))
+      if (mapped.length === 1) {
+        onResult(mapped[0])
+      } else {
+        onAddItems(mapped)
+      }
       setRecognized(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
@@ -1083,6 +1091,8 @@ function AiTab({ onResult }: { onResult: (f: NutrientForm) => void }) {
           <p className="text-sm text-green-300">認識完了！「手入力」タブで確認・修正できます</p>
         </div>
       )}
+
+
 
       {error && (
         <p className="text-sm text-red-400 text-center bg-red-900/20 border border-red-800 rounded-xl px-4 py-3">{error}</p>
@@ -1142,11 +1152,15 @@ function MealNewInner() {
     setActiveTab('manual')
   }
 
-  // AIタブ: 結果をセットして手入力タブへ
+  // AIタブ: 1品 → 手入力タブで確認、複数品 → そのままリストに追加
   const handleAiResult = (f: NutrientForm) => {
     setAiResult(f)
     setActiveTab('manual')
   }
+  const handleAiAddItems = useCallback((newItems: NutrientForm[]) => {
+    newItems.forEach(item => addItem(item))
+    setActiveTab('manual')
+  }, [addItem])
 
   const canSave = items.length > 0
 
@@ -1290,7 +1304,7 @@ function MealNewInner() {
               allergens={childAllergens}
             />
           )}
-          {activeTab === 'ai' && <AiTab onResult={handleAiResult} />}
+          {activeTab === 'ai' && <AiTab onResult={handleAiResult} onAddItems={handleAiAddItems} />}
         </div>
       </div>
 
