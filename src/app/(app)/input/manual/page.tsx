@@ -121,11 +121,21 @@ export default function ManualInputPage() {
         body: JSON.stringify({ foodName: name.trim() }),
       })
       const data = await res.json()
+      console.log('[fetchNutrition] raw API response:', JSON.stringify(data))
       if (!res.ok) {
         updateFood(id, { loading: false, error: data.error ?? '取得できませんでした' })
         return
       }
       const r = data.result
+      if (!r) {
+        updateFood(id, { loading: false, error: 'APIレスポンスが空です' })
+        return
+      }
+      console.log('[fetchNutrition] micro fields received:', {
+        vitamin_k: r.vitamin_k, vitamin_c: r.vitamin_c,
+        folate: r.folate, calcium: r.calcium,
+        iron: r.iron, magnesium: r.magnesium,
+      })
       updateFood(id, {
         loading: false, error: '',
         calories: r.calories ?? null,
@@ -180,6 +190,15 @@ export default function ManualInputPage() {
 
     // recordedAt: 選択した日付のローカル正午をISO文字列で送る
     const recordedAt = new Date(`${date}T12:00:00`).toISOString()
+
+    console.log('[handleSave] validFoods count:', validFoods.length)
+    validFoods.forEach((f, i) => {
+      console.log(`[handleSave] food[${i}] micro fields:`, {
+        vitamin_k: f.vitamin_k, vitamin_c: f.vitamin_c,
+        folate: f.folate, calcium: f.calcium,
+        iron: f.iron, magnesium: f.magnesium,
+      })
+    })
 
     try {
       await Promise.all(validFoods.map(f =>

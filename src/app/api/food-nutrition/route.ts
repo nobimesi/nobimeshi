@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [
       {
         role: 'user',
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  console.log('[food-nutrition] raw AI text:', text)
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -76,9 +77,32 @@ export async function POST(req: NextRequest) {
     if (result.calories === null) {
       return NextResponse.json({ error: '食品として認識できませんでした' }, { status: 422 })
     }
+    // AIが "不明なら0" の指示を無視してnullを返した場合、0に正規化する
+    const MICRO_KEYS = [
+      'vitamin_a','vitamin_d','vitamin_e','vitamin_k','vitamin_c',
+      'vitamin_b1','vitamin_b2','vitamin_b6','vitamin_b12',
+      'niacin','pantothenic_acid','folate','biotin',
+      'calcium','phosphorus','potassium','sulfur','chlorine','sodium',
+      'magnesium','iron','zinc','copper','manganese',
+      'iodine','selenium','molybdenum','chromium','cobalt',
+    ]
+    for (const key of MICRO_KEYS) {
+      if (result[key] === null || result[key] === undefined) {
+        result[key] = 0
+      }
+    }
+    console.log('[food-nutrition] normalized result keys:', Object.keys(result))
+    console.log('[food-nutrition] sample micro values:', {
+      vitamin_k: result.vitamin_k,
+      vitamin_c: result.vitamin_c,
+      folate: result.folate,
+      calcium: result.calcium,
+      iron: result.iron,
+      magnesium: result.magnesium,
+    })
     return NextResponse.json({ result })
   } catch {
-    console.error('[POST /api/food-nutrition] parse error:', text)
+    console.error('[POST /api/food-nutrition] parse error, raw text:', text)
     return NextResponse.json({ error: 'AIの応答を解析できませんでした' }, { status: 500 })
   }
 }
