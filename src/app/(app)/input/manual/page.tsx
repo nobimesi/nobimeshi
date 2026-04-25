@@ -122,13 +122,17 @@ export default function ManualInputPage() {
       })
       const data = await res.json()
       console.log('[fetchNutrition] raw API response:', JSON.stringify(data))
+
       if (!res.ok) {
-        updateFood(id, { loading: false, error: data.error ?? '取得できませんでした' })
+        const msg = res.status === 422
+          ? `「${name}」は食品として認識できませんでした。食品名を変えて再入力してください。`
+          : (data.error ?? '栄養素の取得に失敗しました。もう一度入力してください。')
+        updateFood(id, { loading: false, error: msg })
         return
       }
       const r = data.result
       if (!r) {
-        updateFood(id, { loading: false, error: 'APIレスポンスが空です' })
+        updateFood(id, { loading: false, error: 'データの取得に失敗しました。もう一度入力してください。' })
         return
       }
       console.log('[fetchNutrition] micro fields received:', {
