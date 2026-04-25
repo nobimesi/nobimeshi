@@ -227,31 +227,53 @@ export default function ScanPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    // e.target.value = '' は onload 完了後に移動（Safari で File オブジェクトが
-    // 同期クリアにより無効化され "The string did not match the expected pattern." が
-    // 発生するのを防ぐ）
-    const input = e.target
+
+    // ── MIME タイプを同期的に確定（Anthropic API サポート形式に正規化）──
+    // Safari では onload 内で file.type を参照すると input がクリア済みで
+    // 空文字になる場合があるため、ここで先にキャプチャする。
+    // HEIC / HEIF（iPhone 撮影）など非サポート形式は image/jpeg として送信。
+    const SUPPORTED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
+    type SupportedMime = typeof SUPPORTED_MIME[number]
+    const rawType = file.type.toLowerCase()
+    const resolvedMime: SupportedMime = (SUPPORTED_MIME as readonly string[]).includes(rawType)
+      ? (rawType as SupportedMime)
+      : 'image/jpeg'
+
+    // input 参照も同期的にキャプチャ
+    const inputEl = e.target
+
     const reader = new FileReader()
+
     reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      if (!dataUrl) return
-      setPreview(dataUrl)
-      // base64 部分のみ抽出（data:[type];base64, の後ろ）
-      const commaIdx = dataUrl.indexOf(',')
-      setImageBase64(commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl)
-      // Anthropic API がサポートするMIMEタイプに正規化
-      const SUPPORTED = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-      const mt = file.type.toLowerCase()
-      setMediaType(SUPPORTED.includes(mt) ? mt : 'image/jpeg')
-      // FileReader 完了後にクリア（Safari の File 無効化を回避）
-      input.value = ''
+      const result = ev.target?.result
+      // readAsDataURL は必ず string を返すが型安全のためガード
+      if (typeof result !== 'string' || !result) {
+        setAnalyzeError('画像データの読み込みに失敗しました。')
+        return
+      }
+
+      // "data:[type];base64,<data>" の <data> 部分のみ取り出す
+      // indexOf で最初の "," を探す（URL に複数カンマがある場合も安全）
+      const commaIdx = result.indexOf(',')
+      const base64 = commaIdx >= 0 ? result.slice(commaIdx + 1) : result
+
+      setPreview(result)
+      setImageBase64(base64)
+      setMediaType(resolvedMime)
+
+      // ── input クリアは onload 完了後に実行 ──
+      // 同期クリアすると Safari で File オブジェクトが無効化され
+      // "The string did not match the expected pattern." が発生する。
+      inputEl.value = ''
     }
+
     reader.onerror = () => {
       setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
     }
-    reader.readAsDataURL(file)
+
     setResult(null)
     setAnalyzeError('')
+    reader.readAsDataURL(file)
   }
 
   const reset = () => {
