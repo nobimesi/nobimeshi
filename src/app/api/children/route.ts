@@ -13,7 +13,7 @@ export async function GET() {
   const supabase = createServiceClient()
   const { data: children, error } = await supabase
     .from('children')
-    .select('id, name, birth_date, gender, avatar, activity_level')
+    .select('id, name, birth_date, gender, avatar, activity_level, target_calories')
     .eq('user_id', session.user.email)
     .order('created_at', { ascending: true })
 
@@ -104,7 +104,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { id, name, birth_date, gender, avatar, activity_level, height, weight } = body
+  const { id, name, birth_date, gender, avatar, activity_level, height, weight, target_calories } = body
 
   if (!id || !name?.trim()) {
     return NextResponse.json({ error: 'id と名前は必須です' }, { status: 400 })
@@ -122,6 +122,7 @@ export async function PATCH(req: NextRequest) {
       activity_level: activity_level || '普通',
       height: height ? parseFloat(height) : null,
       weight: weight ? parseFloat(weight) : null,
+      target_calories: target_calories != null && target_calories !== '' ? parseInt(String(target_calories), 10) : null,
     })
     .eq('id', id)
     .eq('user_id', session.user.email)

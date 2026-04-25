@@ -11,6 +11,7 @@ type Child = {
   birth_date: string
   gender: string | null
   activity_level: string | null
+  target_calories: number | null
 }
 
 type MealRecord = {
@@ -605,7 +606,7 @@ export default function HomePage() {
     carbs:    mealRecords.reduce((s, r) => s + (r.carbs ?? 0), 0),
     fat:      mealRecords.reduce((s, r) => s + (r.fat ?? 0), 0),
   }
-  const targetKcal = NUTRIENT_TARGETS[0].max
+  const targetKcal = child?.target_calories ?? NUTRIENT_TARGETS[0].max
   const kcalRaw = Math.round((totals.calories / targetKcal) * 100)
   const kcalPct = Math.min(kcalRaw, 100) // 表示用（上限100%）
 

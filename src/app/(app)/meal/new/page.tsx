@@ -534,13 +534,40 @@ function calcNutrients(food: Food, qty: number, unit: Unit) {
   }
 }
 
+// ---- アレルゲン照合 ----
+const ALLERGEN_KEYWORDS: Record<string, string[]> = {
+  '卵':     ['卵', 'たまご', 'タマゴ', '玉子', 'egg', 'オムレツ', 'オムライス', '茶碗蒸し', 'スクランブル', '目玉焼', 'フレンチトースト'],
+  '乳製品': ['牛乳', 'ミルク', 'チーズ', 'バター', 'ヨーグルト', 'クリーム', 'milk', 'cheese', 'butter', 'yogurt', 'グラタン', 'ドリア'],
+  '小麦':   ['パン', 'うどん', 'ラーメン', 'パスタ', 'スパゲ', 'ピザ', 'ナン', 'クロワッサン', 'ベーグル', 'ロールパン', '蒸しパン', 'フレンチトースト', '小麦', '天ぷら', 'コロッケ', 'フライ', 'カツ', '焼きそば', 'グラタン', '春巻', '餃子', 'たこ焼', 'お好み焼', 'ナゲット'],
+  'そば':   ['そば', '蕎麦'],
+  '落花生': ['ピーナッツ', '落花生', 'peanut'],
+  'えび':   ['えび', 'エビ', '海老', '蝦', 'shrimp', 'prawn'],
+  'かに':   ['かに', 'カニ', '蟹', 'crab'],
+  '魚介類': ['魚', '鮭', 'サーモン', 'サバ', 'さんま', 'まぐろ', 'マグロ', 'アジ', 'いか', 'イカ', 'たこ', 'タコ', 'ほたて', 'ホタテ', 'しらす', 'ツナ', 'ちくわ', 'かまぼこ', 'さつま揚げ', '刺身', '寿司', '魚介'],
+  'ナッツ類':['くるみ', 'アーモンド', 'カシュー', 'ピスタチオ', 'ナッツ', 'nuts', 'walnut', 'almond'],
+  '大豆':   ['豆腐', '納豆', '枝豆', '豆乳', '厚揚げ', '油揚げ', 'がんも', '大豆', 'edamame', 'tofu', '味噌'],
+}
+
+function checkAllergens(foodName: string, childAllergens: string[]): string[] {
+  const matched: string[] = []
+  for (const allergen of childAllergens) {
+    const keywords = ALLERGEN_KEYWORDS[allergen] ?? [allergen]
+    if (keywords.some(kw => foodName.includes(kw))) {
+      matched.push(allergen)
+    }
+  }
+  return matched
+}
+
 // ---- 検索タブ ----
 function SearchTab({
   onSelect,
   onAiResult,
+  allergens,
 }: {
   onSelect: (f: NutrientForm) => void
   onAiResult: (f: NutrientForm) => void
+  allergens: string[]
 }) {
   const [query, setQuery] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
@@ -618,30 +645,42 @@ function SearchTab({
             )}
             <p className="text-xs text-gray-600 text-center">※ AIによる推定値です。手入力タブで確認できます</p>
           </div>
-        ) : results.map((food, i) => (
-          <button
-            type="button"
-            key={i}
-            onClick={() => onSelect({
-              foodName: food.name,
-              calories: String(food.calories),
-              protein:  String(food.protein),
-              carbs:    String(food.carbs),
-              fat:      String(food.fat),
-              micro:    pickMicro(food as unknown as Record<string, unknown>),
-            })}
-            className="flex items-center justify-between p-3 rounded-xl bg-gray-800 border border-gray-700 hover:border-orange-500 active:scale-[0.98] transition-all text-left"
-          >
-            <div>
-              <p className="text-sm font-medium text-white">{food.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{food.portion} · {food.category}</p>
-            </div>
-            <div className="text-right shrink-0 ml-3">
-              <p className="text-sm font-bold text-orange-400">{food.calories}kcal</p>
-              <p className="text-xs text-gray-500">P:{food.protein}g C:{food.carbs}g F:{food.fat}g</p>
-            </div>
-          </button>
-        ))}
+        ) : results.map((food, i) => {
+          const foodAllergens = checkAllergens(food.name + (food.aliases?.join('') ?? ''), allergens)
+          return (
+            <button
+              type="button"
+              key={i}
+              onClick={() => onSelect({
+                foodName: food.name,
+                calories: String(food.calories),
+                protein:  String(food.protein),
+                carbs:    String(food.carbs),
+                fat:      String(food.fat),
+                micro:    pickMicro(food as unknown as Record<string, unknown>),
+              })}
+              className={`flex items-center justify-between p-3 rounded-xl bg-gray-800 border active:scale-[0.98] transition-all text-left ${
+                foodAllergens.length > 0 ? 'border-red-500/60 hover:border-red-400' : 'border-gray-700 hover:border-orange-500'
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-medium text-white">{food.name}</p>
+                  {foodAllergens.length > 0 && (
+                    <span className="text-xs text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded-full shrink-0">
+                      ⚠️ {foodAllergens.join('・')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">{food.portion} · {food.category}</p>
+              </div>
+              <div className="text-right shrink-0 ml-3">
+                <p className="text-sm font-bold text-orange-400">{food.calories}kcal</p>
+                <p className="text-xs text-gray-500">P:{food.protein}g C:{food.carbs}g F:{food.fat}g</p>
+              </div>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -653,11 +692,13 @@ function ManualTab({
   onAddItem,
   onRemoveItem,
   defaultValues,
+  allergens,
 }: {
   items: NutrientForm[]
   onAddItem: (f: NutrientForm) => void
   onRemoveItem: (index: number) => void
   defaultValues?: NutrientForm
+  allergens: string[]
 }) {
   const [foodQuery, setFoodQuery] = useState(defaultValues?.foodName ?? '')
   const [matchedFood, setMatchedFood] = useState<Food | null>(null)
@@ -753,23 +794,31 @@ function ManualTab({
       {items.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium text-gray-400">追加済み（{items.length}品目）</p>
-          {items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{item.foodName}</p>
-                <div className="flex gap-2 text-xs text-gray-400 mt-0.5">
-                  {item.calories && <span>🔥{item.calories}kcal</span>}
-                  {item.protein  && <span>P{item.protein}g</span>}
-                  {item.carbs    && <span>C{item.carbs}g</span>}
-                  {item.fat      && <span>F{item.fat}g</span>}
+          {items.map((item, i) => {
+            const itemAllergens = checkAllergens(item.foodName, allergens)
+            return (
+              <div key={i} className={`flex items-center justify-between bg-gray-800 border rounded-xl px-3 py-2.5 ${
+                itemAllergens.length > 0 ? 'border-red-500/60' : 'border-gray-700'
+              }`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{item.foodName}</p>
+                  <div className="flex gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                    {item.calories && <span>🔥{item.calories}kcal</span>}
+                    {item.protein  && <span>P{item.protein}g</span>}
+                    {item.carbs    && <span>C{item.carbs}g</span>}
+                    {item.fat      && <span>F{item.fat}g</span>}
+                  </div>
+                  {itemAllergens.length > 0 && (
+                    <p className="text-xs text-red-400 mt-0.5">⚠️ {itemAllergens.join('・')}を含む可能性</p>
+                  )}
                 </div>
+                <button type="button" onClick={() => onRemoveItem(i)}
+                  className="w-7 h-7 ml-2 shrink-0 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button type="button" onClick={() => onRemoveItem(i)}
-                className="w-7 h-7 ml-2 shrink-0 flex items-center justify-center text-gray-500 hover:text-red-400 transition-colors">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -818,6 +867,16 @@ function ManualTab({
                 <p className="text-sm font-bold text-orange-400 shrink-0 ml-3">{food.calories}kcal</p>
               </button>
             ))}
+          </div>
+        )}
+
+        {/* アレルゲン警告 */}
+        {foodQuery.trim() && checkAllergens(foodQuery, allergens).length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+            <span className="text-red-400 text-xs">⚠️</span>
+            <p className="text-xs text-red-300">
+              {checkAllergens(foodQuery, allergens).join('・')}が含まれている可能性があります
+            </p>
           </div>
         )}
 
@@ -1042,6 +1101,7 @@ function MealNewInner() {
 
   const [children, setChildren] = useState<{ id: string; name: string; avatar: string }[]>([])
   const [selectedChildIndex, setSelectedChildIndex] = useState(0)
+  const [childAllergens, setChildAllergens] = useState<string[]>([])
   const [mealType, setMealType] = useState<MealTypeKey>(initialMeal)
   const [activeTab, setActiveTab] = useState<TabKey>('search')
   const [items, setItems] = useState<NutrientForm[]>([])
@@ -1058,6 +1118,20 @@ function MealNewInner() {
   useEffect(() => {
     fetch('/api/children').then(r => r.json()).then(d => setChildren(d.children ?? [])).catch(console.error)
   }, [])
+
+  useEffect(() => {
+    const child = children[selectedChildIndex]
+    if (!child) { setChildAllergens([]); return }
+    fetch(`/api/food-restrictions?childId=${child.id}`)
+      .then(r => r.json())
+      .then(d => {
+        const allergens = (d.restrictions ?? [])
+          .filter((r: { restriction_type: string }) => r.restriction_type === 'allergy')
+          .map((r: { food_name: string }) => r.food_name)
+        setChildAllergens(allergens)
+      })
+      .catch(console.error)
+  }, [children, selectedChildIndex])
 
   const addItem = useCallback((f: NutrientForm) => setItems(prev => [...prev, f]), [])
   const removeItem = useCallback((i: number) => setItems(prev => prev.filter((_, idx) => idx !== i)), [])
@@ -1192,7 +1266,20 @@ function MealNewInner() {
             ))}
           </div>
 
-          {activeTab === 'search' && <SearchTab onSelect={handleSearchSelect} onAiResult={handleAiResult} />}
+          {/* アレルギー警告バナー */}
+          {(() => {
+            const warnings = [...new Set(items.flatMap(item => checkAllergens(item.foodName, childAllergens)))]
+            return warnings.length > 0 ? (
+              <div className="mb-3 flex items-start gap-2 bg-red-500/20 border border-red-500/50 rounded-xl px-4 py-3">
+                <span className="text-red-400 shrink-0 text-base">⚠️</span>
+                <p className="text-sm text-red-300">
+                  この食品には<span className="font-semibold">{warnings.join('、')}</span>が含まれています！
+                </p>
+              </div>
+            ) : null
+          })()}
+
+          {activeTab === 'search' && <SearchTab onSelect={handleSearchSelect} onAiResult={handleAiResult} allergens={childAllergens} />}
           {activeTab === 'manual' && (
             <ManualTab
               key={aiResult ? JSON.stringify(aiResult) : 'manual'}
@@ -1200,6 +1287,7 @@ function MealNewInner() {
               onAddItem={addItem}
               onRemoveItem={removeItem}
               defaultValues={aiResult}
+              allergens={childAllergens}
             />
           )}
           {activeTab === 'ai' && <AiTab onResult={handleAiResult} />}

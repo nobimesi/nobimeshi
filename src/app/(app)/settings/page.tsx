@@ -18,6 +18,7 @@ interface Child {
   birth_date: string
   gender: string | null
   activity_level: string | null
+  target_calories: number | null
 }
 
 function getAge(birthDate: string) {
@@ -34,6 +35,32 @@ type ChildFormState = {
   name: string; emoji: string; birthDate: string
   gender: string; height: string; weight: string; activity: string
   allergies: string[]; otherAllergy: string
+  targetCalories: string
+}
+
+// 日本人食事摂取基準2020年版 推定エネルギー必要量（レベルII）
+const CALORIE_BASE: [number, number][] = [
+  [950, 900],   // 1-2歳
+  [1300, 1250], // 3-5歳
+  [1550, 1450], // 6-7歳
+  [1850, 1700], // 8-9歳
+  [2250, 2100], // 10-11歳
+  [2600, 2400], // 12-14歳
+  [2800, 2300], // 15-17歳
+  [2650, 2000], // 18歳以上
+]
+
+function calcDefaultCalories(birthDate: string, gender: string, activity: string): number {
+  const birth = new Date(birthDate)
+  const now = new Date()
+  let age = now.getFullYear() - birth.getFullYear()
+  const m = now.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--
+  const isFemale = gender === '女の子'
+  const bracketIdx = age <= 2 ? 0 : age <= 5 ? 1 : age <= 7 ? 2 : age <= 9 ? 3 : age <= 11 ? 4 : age <= 14 ? 5 : age <= 17 ? 6 : 7
+  const base = CALORIE_BASE[bracketIdx][isFemale ? 1 : 0]
+  const factor = activity === '少ない' ? 0.9 : activity === '多い' ? 1.15 : 1.0
+  return Math.round(base * factor)
 }
 
 const COMMON_ALLERGENS = ['卵', '乳製品', '小麦', 'そば', '落花生', 'えび', 'かに', '魚介類', 'ナッツ類', '大豆']
@@ -57,6 +84,7 @@ function ChildForm({
     activity: initial?.activity ?? '普通',
     allergies: initial?.allergies ?? [],
     otherAllergy: initial?.otherAllergy ?? '',
+    targetCalories: initial?.targetCalories ?? '',
   })
 
   // initial が変わったときに form を再初期化（同一インスタンスの再利用を防ぐ補完）
@@ -71,6 +99,7 @@ function ChildForm({
       activity: initial?.activity ?? '普通',
       allergies: initial?.allergies ?? [],
       otherAllergy: initial?.otherAllergy ?? '',
+      targetCalories: initial?.targetCalories ?? '',
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial?.id])
@@ -207,6 +236,35 @@ function ChildForm({
           onChange={e => set('otherAllergy', e.target.value)}
           className="mt-2 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
         />
+      </div>
+
+      {/* 目標カロリー */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-medium text-gray-500">目標カロリー (kcal)</label>
+          {form.birthDate && (
+            <button
+              type="button"
+              onClick={() => {
+                const auto = calcDefaultCalories(form.birthDate, form.gender, form.activity)
+                set('targetCalories', String(auto))
+              }}
+              className="text-xs text-orange-500 underline"
+            >
+              自動計算
+            </button>
+          )}
+        </div>
+        <input
+          type="number"
+          placeholder={form.birthDate
+            ? `自動計算: ${calcDefaultCalories(form.birthDate, form.gender, form.activity)} kcal`
+            : '例: 1600'}
+          value={form.targetCalories}
+          onChange={e => set('targetCalories', e.target.value)}
+          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+        />
+        <p className="text-xs text-gray-400 mt-1">空欄の場合は年齢・性別・運動習慣から自動計算します</p>
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -561,6 +619,7 @@ export default function SettingsPage() {
       activity: child.activity_level ?? '普通',
       allergies,
       otherAllergy,
+      targetCalories: child.target_calories != null ? String(child.target_calories) : '',
     })
   }
   const [showContact, setShowContact] = useState(false)
@@ -814,6 +873,9 @@ export default function SettingsPage() {
                         activity_level: data.activity,
                         height: data.height,
                         weight: data.weight,
+                        target_calories: data.targetCalories
+                          ? parseInt(data.targetCalories, 10)
+                          : calcDefaultCalories(data.birthDate, data.gender, data.activity),
                       }),
                     })
                     await saveAllergies(editChild.id!)
