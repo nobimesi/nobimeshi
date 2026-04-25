@@ -21,20 +21,37 @@ interface FoodEntry {
   protein: number | null
   carbs: number | null
   fat: number | null
-  // micros
+  // ビタミン 13種
   vitamin_a: number | null
   vitamin_d: number | null
   vitamin_e: number | null
+  vitamin_k: number | null
   vitamin_c: number | null
   vitamin_b1: number | null
   vitamin_b2: number | null
+  vitamin_b6: number | null
+  vitamin_b12: number | null
+  niacin: number | null
+  pantothenic_acid: number | null
   folate: number | null
+  biotin: number | null
+  // ミネラル 16種
   calcium: number | null
+  phosphorus: number | null
+  potassium: number | null
+  sulfur: number | null
+  chlorine: number | null
+  sodium: number | null
+  magnesium: number | null
   iron: number | null
   zinc: number | null
-  potassium: number | null
-  magnesium: number | null
-  sodium: number | null
+  copper: number | null
+  manganese: number | null
+  iodine: number | null
+  selenium: number | null
+  molybdenum: number | null
+  chromium: number | null
+  cobalt: number | null
   loading: boolean
   error: string
 }
@@ -54,10 +71,13 @@ function emptyEntry(id: number): FoodEntry {
   return {
     id, name: '', amount: '', unit: 'g',
     calories: null, protein: null, carbs: null, fat: null,
-    vitamin_a: null, vitamin_d: null, vitamin_e: null, vitamin_c: null,
-    vitamin_b1: null, vitamin_b2: null, folate: null,
-    calcium: null, iron: null, zinc: null,
-    potassium: null, magnesium: null, sodium: null,
+    vitamin_a: null, vitamin_d: null, vitamin_e: null, vitamin_k: null,
+    vitamin_c: null, vitamin_b1: null, vitamin_b2: null, vitamin_b6: null,
+    vitamin_b12: null, niacin: null, pantothenic_acid: null, folate: null, biotin: null,
+    calcium: null, phosphorus: null, potassium: null, sulfur: null, chlorine: null,
+    sodium: null, magnesium: null, iron: null, zinc: null, copper: null,
+    manganese: null, iodine: null, selenium: null, molybdenum: null,
+    chromium: null, cobalt: null,
     loading: false, error: '',
   }
 }
@@ -112,19 +132,37 @@ export default function ManualInputPage() {
         protein:  r.protein  ?? null,
         carbs:    r.carbs    ?? null,
         fat:      r.fat      ?? null,
-        vitamin_a:  r.vitamin_a  ?? null,
-        vitamin_d:  r.vitamin_d  ?? null,
-        vitamin_e:  r.vitamin_e  ?? null,
-        vitamin_c:  r.vitamin_c  ?? null,
-        vitamin_b1: r.vitamin_b1 ?? null,
-        vitamin_b2: r.vitamin_b2 ?? null,
-        folate:     r.folate     ?? null,
+        // ビタミン 13種
+        vitamin_a:        r.vitamin_a        ?? null,
+        vitamin_d:        r.vitamin_d        ?? null,
+        vitamin_e:        r.vitamin_e        ?? null,
+        vitamin_k:        r.vitamin_k        ?? null,
+        vitamin_c:        r.vitamin_c        ?? null,
+        vitamin_b1:       r.vitamin_b1       ?? null,
+        vitamin_b2:       r.vitamin_b2       ?? null,
+        vitamin_b6:       r.vitamin_b6       ?? null,
+        vitamin_b12:      r.vitamin_b12      ?? null,
+        niacin:           r.niacin           ?? null,
+        pantothenic_acid: r.pantothenic_acid ?? null,
+        folate:           r.folate           ?? null,
+        biotin:           r.biotin           ?? null,
+        // ミネラル 16種
         calcium:    r.calcium    ?? null,
+        phosphorus: r.phosphorus ?? null,
+        potassium:  r.potassium  ?? null,
+        sulfur:     r.sulfur     ?? null,
+        chlorine:   r.chlorine   ?? null,
+        sodium:     r.sodium     ?? null,
+        magnesium:  r.magnesium  ?? null,
         iron:       r.iron       ?? null,
         zinc:       r.zinc       ?? null,
-        potassium:  r.potassium  ?? null,
-        magnesium:  r.magnesium  ?? null,
-        sodium:     r.sodium     ?? null,
+        copper:     r.copper     ?? null,
+        manganese:  r.manganese  ?? null,
+        iodine:     r.iodine     ?? null,
+        selenium:   r.selenium   ?? null,
+        molybdenum: r.molybdenum ?? null,
+        chromium:   r.chromium   ?? null,
+        cobalt:     r.cobalt     ?? null,
       })
     } catch {
       updateFood(id, { loading: false, error: '通信エラーが発生しました' })
@@ -158,19 +196,37 @@ export default function ManualInputPage() {
             fat:      f.fat,
             notes:    f.amount ? `${f.amount}${f.unit}` : null,
             recordedAt,
-            vitamin_a:  f.vitamin_a,
-            vitamin_d:  f.vitamin_d,
-            vitamin_e:  f.vitamin_e,
-            vitamin_c:  f.vitamin_c,
-            vitamin_b1: f.vitamin_b1,
-            vitamin_b2: f.vitamin_b2,
-            folate:     f.folate,
+            // ビタミン 13種
+            vitamin_a:        f.vitamin_a,
+            vitamin_d:        f.vitamin_d,
+            vitamin_e:        f.vitamin_e,
+            vitamin_k:        f.vitamin_k,
+            vitamin_c:        f.vitamin_c,
+            vitamin_b1:       f.vitamin_b1,
+            vitamin_b2:       f.vitamin_b2,
+            vitamin_b6:       f.vitamin_b6,
+            vitamin_b12:      f.vitamin_b12,
+            niacin:           f.niacin,
+            pantothenic_acid: f.pantothenic_acid,
+            folate:           f.folate,
+            biotin:           f.biotin,
+            // ミネラル 16種
             calcium:    f.calcium,
+            phosphorus: f.phosphorus,
+            potassium:  f.potassium,
+            sulfur:     f.sulfur,
+            chlorine:   f.chlorine,
+            sodium:     f.sodium,
+            magnesium:  f.magnesium,
             iron:       f.iron,
             zinc:       f.zinc,
-            potassium:  f.potassium,
-            magnesium:  f.magnesium,
-            sodium:     f.sodium,
+            copper:     f.copper,
+            manganese:  f.manganese,
+            iodine:     f.iodine,
+            selenium:   f.selenium,
+            molybdenum: f.molybdenum,
+            chromium:   f.chromium,
+            cobalt:     f.cobalt,
           }),
         }).then(r => { if (!r.ok) throw new Error('保存に失敗しました') })
       ))
