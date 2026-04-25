@@ -111,6 +111,14 @@ export default function ManualInputPage() {
     setFoods(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f))
   }
 
+  // 食品名変更時に栄養素をリセット（名前変更 = 未取得状態に戻す）
+  const resetNutritionOnNameChange = (id: number, newName: string) => {
+    setFoods(prev => prev.map(f => {
+      if (f.id !== id) return f
+      return { ...emptyEntry(id), name: newName, amount: f.amount, unit: f.unit }
+    }))
+  }
+
   const fetchNutrition = async (id: number, name: string) => {
     if (!name.trim()) return
     updateFood(id, { loading: true, error: '' })
@@ -197,12 +205,23 @@ export default function ManualInputPage() {
 
     console.log('[handleSave] validFoods count:', validFoods.length)
     validFoods.forEach((f, i) => {
-      console.log(`[handleSave] food[${i}] micro fields:`, {
+      console.log(`[handleSave] food[${i}] name="${f.name}" calories=${f.calories} fetched=${f.calories !== null} error="${f.error}"`)
+      console.log(`[handleSave] food[${i}] micro:`, {
         vitamin_k: f.vitamin_k, vitamin_c: f.vitamin_c,
         folate: f.folate, calcium: f.calcium,
         iron: f.iron, magnesium: f.magnesium,
+        vitamin_d: f.vitamin_d, zinc: f.zinc,
       })
     })
+
+    // 安全チェック：まだ栄養素未取得の食材があれば中断（通常はcanSaveで弾かれているはず）
+    const stillUnfetched = validFoods.filter(f => f.calories === null && f.error === '')
+    if (stillUnfetched.length > 0) {
+      console.warn('[handleSave] aborted: unfetched foods found', stillUnfetched.map(f => f.name))
+      setSaving(false)
+      setSaveError('栄養素を取得中です。しばらく待ってから再度押してください。')
+      return
+    }
 
     try {
       await Promise.all(validFoods.map(f =>
@@ -263,7 +282,14 @@ export default function ManualInputPage() {
 
   const child = children[childIndex]
   const totalCalories = foods.reduce((sum, f) => sum + (f.calories ?? 0), 0)
-  const canSave = !saving && !!child && foods.some(f => f.name.trim()) && !foods.some(f => f.loading)
+
+  // 名前が入力済みの食材
+  const namedFoods = foods.filter(f => f.name.trim())
+  // 全ての名前入力済み食材の栄養素が取得済み（calories !== null）またはエラー済みであること
+  const allNutritionReady = namedFoods.length > 0 &&
+    namedFoods.every(f => f.calories !== null || f.error !== '')
+  const canSave = !saving && !!child && namedFoods.length > 0 &&
+    !foods.some(f => f.loading) && allNutritionReady
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -339,8 +365,9 @@ export default function ManualInputPage() {
                       type="text"
                       placeholder="食材・料理名を入力"
                       value={food.name}
-                      onChange={e => updateFood(food.id, { name: e.target.value })}
+                      onChange={e => resetNutritionOnNameChange(food.id, e.target.value)}
                       onBlur={e => fetchNutrition(food.id, e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
                       className="w-full border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                     />
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -380,6 +407,8 @@ export default function ManualInputPage() {
                   </div>
                 ) : food.error ? (
                   <p className="text-xs text-red-500">{food.error}</p>
+                ) : food.name.trim() && food.calories === null ? (
+                  <p className="text-xs text-gray-400">入力を確定（Enterまたはフォーカス移動）すると栄養素を自動取得します</p>
                 ) : food.calories !== null ? (
                   <div className="flex flex-col gap-2">
                     <div className="grid grid-cols-4 gap-2">
