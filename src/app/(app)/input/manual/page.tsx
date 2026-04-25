@@ -263,7 +263,7 @@ export default function ManualInputPage() {
 
   const child = children[childIndex]
   const totalCalories = foods.reduce((sum, f) => sum + (f.calories ?? 0), 0)
-  const canSave = !saving && !!child && foods.some(f => f.name.trim())
+  const canSave = !saving && !!child && foods.some(f => f.name.trim()) && !foods.some(f => f.loading)
 
   return (
     <div className="flex flex-col min-h-screen">

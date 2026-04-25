@@ -403,6 +403,43 @@ function getProteinGoal(age: number, isFemale: boolean): number {
   return PROTEIN_GOAL[idx][isFemale?1:0]
 }
 
+// ── アレルゲンフィルタリングヘルパー ─────────────────────────────────────────
+function buildForbiddenSet(allergies: string[]): Set<string> {
+  const set = new Set<string>()
+  for (const a of allergies) {
+    const lower = a.toLowerCase()
+    set.add(lower)
+    if (lower.includes('乳') || lower.includes('ミルク') || lower === '牛乳') {
+      for (const t of ['乳', '牛乳', 'ヨーグルト', 'チーズ', '乳製品']) set.add(t)
+    }
+    if (lower.includes('魚') || lower.includes('えび') || lower.includes('かに') || lower.includes('魚介')) {
+      for (const t of ['魚', '鮭', 'しらす', '小魚', 'えび', 'かに', '魚介']) set.add(t)
+    }
+    if (lower.includes('大豆') || lower === '豆腐' || lower === '納豆') {
+      for (const t of ['大豆', '豆腐', '豆類', '大豆製品', '納豆', '枝豆']) set.add(t)
+    }
+    if (lower.includes('肉')) {
+      for (const t of ['肉', 'お肉', '赤身肉', '赤身のお肉']) set.add(t)
+    }
+    if (lower.includes('ナッツ') || lower.includes('くるみ') || lower.includes('アーモンド')) {
+      for (const t of ['ナッツ', 'くるみ', 'アーモンド']) set.add(t)
+    }
+    if (lower.includes('卵') || lower.includes('玉子')) {
+      for (const t of ['卵', '玉子']) set.add(t)
+    }
+  }
+  return set
+}
+
+function safeFoodList(
+  candidates: Array<{ text: string; tags: string[] }>,
+  forbidden: Set<string>,
+): string[] {
+  return candidates
+    .filter(c => !c.tags.some(tag => forbidden.has(tag)))
+    .map(c => c.text)
+}
+
 // ルールベースのアドバイス生成（最大2件、優先度順）
 function generateAdvice(
   totals: { calories: number; protein: number; carbs: number; fat: number },
@@ -411,8 +448,10 @@ function generateAdvice(
   childAge: number,
   childIsFemale: boolean,
   childName: string,
+  allergies: string[] = [],
 ): string[] {
   const name = childName ? `${childName}ちゃん` : 'お子さん'
+  const forbidden = buildForbiddenSet(allergies)
 
   // カロリーがほぼゼロなら記録を促すだけ
   if (kcalPct < 10) {
@@ -438,31 +477,63 @@ function generateAdvice(
   const proteinGoal = getProteinGoal(childAge, childIsFemale)
   const proteinPct = proteinGoal > 0 ? (totals.protein / proteinGoal) * 100 : 100
   if (proteinPct < 55) {
-    issues.push({ priority: 2, msg: `たんぱく質が少なめです。お肉・魚・卵・豆腐を取り入れると、${name}の筋肉と免疫力がアップします💪` })
+    const foods = safeFoodList([
+      { text: 'お肉', tags: ['お肉', '肉'] },
+      { text: '魚', tags: ['魚'] },
+      { text: '卵', tags: ['卵', '玉子'] },
+      { text: '豆腐', tags: ['豆腐', '大豆'] },
+    ], forbidden)
+    const src = foods.length > 0 ? `${foods.join('・')}を取り入れると、` : ''
+    issues.push({ priority: 2, msg: `たんぱく質が少なめです。${src}${name}の筋肉と免疫力がアップします💪` })
   }
 
   // ── カルシウム（骨・身長）──
   const calcPct = driPct('calcium')
   if (calcPct < 55) {
-    issues.push({ priority: 3, msg: `カルシウムが不足しています。${name}の骨や身長のために、牛乳・ヨーグルト・チーズ・小魚をプラスしてみて🦴` })
+    const foods = safeFoodList([
+      { text: '牛乳', tags: ['牛乳', '乳'] },
+      { text: 'ヨーグルト', tags: ['ヨーグルト', '乳'] },
+      { text: 'チーズ', tags: ['チーズ', '乳'] },
+      { text: '小魚', tags: ['小魚', '魚'] },
+    ], forbidden)
+    const src = foods.length > 0 ? foods.join('・') : '骨ごと食べられる食品'
+    issues.push({ priority: 3, msg: `カルシウムが不足しています。${name}の骨や身長のために、${src}をプラスしてみて🦴` })
   }
 
   // ── 鉄（エネルギー・血液）──
   const ironPct = driPct('iron')
   if (ironPct < 50) {
-    issues.push({ priority: 4, msg: `鉄が少なめです。赤身のお肉・ほうれん草・大豆製品で元気をチャージしましょう🥩` })
+    const foods = safeFoodList([
+      { text: '赤身のお肉', tags: ['赤身のお肉', '肉', 'お肉'] },
+      { text: 'ほうれん草', tags: ['ほうれん草'] },
+      { text: '大豆製品', tags: ['大豆製品', '大豆', '豆腐'] },
+    ], forbidden)
+    const src = foods.length > 0 ? foods.join('・') : '鉄分の多い食品'
+    issues.push({ priority: 4, msg: `鉄が少なめです。${src}で元気をチャージしましょう🥩` })
   }
 
   // ── ビタミンD（カルシウム吸収サポート）──
   const vitDPct = driPct('vitamin_d')
   if (vitDPct < 50 && calcPct < 80) {
-    issues.push({ priority: 5, msg: `ビタミンDを補うとカルシウムの吸収がアップ！鮭・しらす・きのこ類がおすすめです☀️` })
+    const foods = safeFoodList([
+      { text: '鮭', tags: ['鮭', '魚'] },
+      { text: 'しらす', tags: ['しらす', '魚'] },
+      { text: 'きのこ類', tags: ['きのこ'] },
+    ], forbidden)
+    const src = foods.length > 0 ? foods.join('・') : 'きのこ類'
+    issues.push({ priority: 5, msg: `ビタミンDを補うとカルシウムの吸収がアップ！${src}がおすすめです☀️` })
   }
 
   // ── 亜鉛（免疫・成長）──
   const zincPct = driPct('zinc')
   if (zincPct < 50) {
-    issues.push({ priority: 6, msg: `亜鉛が不足しています。${name}の免疫力と成長のために、赤身肉・豆類・ナッツを意識してみて🛡️` })
+    const foods = safeFoodList([
+      { text: '赤身肉', tags: ['赤身肉', '肉', 'お肉'] },
+      { text: '豆類', tags: ['豆類', '大豆'] },
+      { text: 'ナッツ', tags: ['ナッツ'] },
+    ], forbidden)
+    const src = foods.length > 0 ? foods.join('・') : '亜鉛を含む食品'
+    issues.push({ priority: 6, msg: `亜鉛が不足しています。${name}の免疫力と成長のために、${src}を意識してみて🛡️` })
   }
 
   // ── ビタミンA（目・粘膜・免疫）──
@@ -569,6 +640,7 @@ export default function HomePage() {
   const [loadingMeals, setLoadingMeals] = useState(false)
   const [editMeal, setEditMeal] = useState<MealRecord | null>(null)
   const [microModal, setMicroModal] = useState<'vitamin' | 'mineral' | null>(null)
+  const [childAllergies, setChildAllergies] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/children')
@@ -576,6 +648,20 @@ export default function HomePage() {
       .then(d => setChildren(d.children ?? []))
       .catch(console.error)
   }, [])
+
+  useEffect(() => {
+    const child = children[selectedChild]
+    if (!child) { setChildAllergies([]); return }
+    fetch(`/api/food-restrictions?childId=${child.id}`)
+      .then(r => r.json())
+      .then(d => {
+        const names = (d.restrictions ?? [])
+          .filter((r: { restriction_type: string }) => r.restriction_type === 'allergy')
+          .map((r: { food_name: string }) => r.food_name as string)
+        setChildAllergies(names)
+      })
+      .catch(() => setChildAllergies([]))
+  }, [children, selectedChild])
 
   const fetchMeals = useCallback((childId: string, date: Date) => {
     const dateStr = toLocalDateStr(date)
@@ -614,7 +700,7 @@ export default function HomePage() {
   const vitaminScore = calcMicroScore(mealRecords, VITAMIN_DRI)
   const mineralScore = calcMicroScore(mealRecords, MINERAL_DRI)
 
-  const advice = generateAdvice(totals, mealRecords, kcalRaw, childAge, childIsFemale, child?.name ?? '')
+  const advice = generateAdvice(totals, mealRecords, kcalRaw, childAge, childIsFemale, child?.name ?? '', childAllergies)
 
   const handleEditSaved = () => {
     const c = children[selectedChild]
