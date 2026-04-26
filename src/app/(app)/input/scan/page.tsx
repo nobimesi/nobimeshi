@@ -175,6 +175,8 @@ export default function ScanPage() {
   const [analyzeError, setAnalyzeError] = useState('')
   const [cameraError, setCameraError] = useState('')
 
+  const [fileInputKey, setFileInputKey] = useState(0)
+
   const [children, setChildren] = useState<Child[]>([])
   const [selectedChildIndex, setSelectedChildIndex] = useState(0)
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch')
@@ -228,52 +230,98 @@ export default function ScanPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // ── MIME タイプを同期的に確定（Anthropic API サポート形式に正規化）──
-    // Safari では onload 内で file.type を参照すると input がクリア済みで
-    // 空文字になる場合があるため、ここで先にキャプチャする。
-    // HEIC / HEIF（iPhone 撮影）など非サポート形式は image/jpeg として送信。
+    // MIME タイプを同期的にキャプチャ（Safari では非同期コールバック内で取得できない場合あり）
+    const rawType = file.type.toLowerCase()
+    // HEIC / HEIF 判定（type が空文字になるケースも拡張子で補完）
+    const fname = file.name.toLowerCase()
+    const isHeic = rawType === 'image/heic' || rawType === 'image/heif'
+      || fname.endsWith('.heic') || fname.endsWith('.heif')
+
     const SUPPORTED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
     type SupportedMime = typeof SUPPORTED_MIME[number]
-    const rawType = file.type.toLowerCase()
     const resolvedMime: SupportedMime = (SUPPORTED_MIME as readonly string[]).includes(rawType)
       ? (rawType as SupportedMime)
       : 'image/jpeg'
 
-    // input 参照も同期的にキャプチャ
-    const inputEl = e.target
+    setResult(null)
+    setAnalyzeError('')
+
+    // HEIC → JPEG 変換（Anthropic API は HEIC 非対応のため canvas で変換）
+    const convertToJpeg = (dataUrl: string): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas')
+            canvas.width = img.naturalWidth
+            canvas.height = img.naturalHeight
+            const ctx = canvas.getContext('2d')
+            if (!ctx) throw new Error('canvas unavailable')
+            ctx.drawImage(img, 0, 0)
+            resolve(canvas.toDataURL('image/jpeg', 0.92))
+          } catch (err) {
+            reject(err)
+          }
+        }
+        img.onerror = () => reject(new Error('image load failed'))
+        img.src = dataUrl
+      })
 
     const reader = new FileReader()
 
-    reader.onload = (ev) => {
-      const result = ev.target?.result
-      // readAsDataURL は必ず string を返すが型安全のためガード
-      if (typeof result !== 'string' || !result) {
-        setAnalyzeError('画像データの読み込みに失敗しました。')
-        return
+    reader.onload = async (ev) => {
+      try {
+        const raw = ev.target?.result
+        if (typeof raw !== 'string' || !raw) {
+          setAnalyzeError('画像データの読み込みに失敗しました。')
+          return
+        }
+
+        let dataUrl = raw
+        let mime: string = resolvedMime
+
+        if (isHeic) {
+          // HEIC は canvas 経由で JPEG に変換する
+          try {
+            dataUrl = await convertToJpeg(raw)
+            mime = 'image/jpeg'
+          } catch {
+            setAnalyzeError(
+              'HEIC形式の変換に失敗しました。\n設定アプリ → カメラ → フォーマットを「互換性優先」に変更するか、JPEGで撮影した画像を選択してください。'
+            )
+            return
+          }
+        }
+
+        const commaIdx = dataUrl.indexOf(',')
+        const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
+
+        setPreview(dataUrl)
+        setImageBase64(base64)
+        setMediaType(mime)
+      } catch (err) {
+        console.error('画像読み込みエラー:', err)
+        setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
       }
-
-      // "data:[type];base64,<data>" の <data> 部分のみ取り出す
-      // indexOf で最初の "," を探す（URL に複数カンマがある場合も安全）
-      const commaIdx = result.indexOf(',')
-      const base64 = commaIdx >= 0 ? result.slice(commaIdx + 1) : result
-
-      setPreview(result)
-      setImageBase64(base64)
-      setMediaType(resolvedMime)
-
-      // ── input クリアは onload 完了後に実行 ──
-      // 同期クリアすると Safari で File オブジェクトが無効化され
-      // "The string did not match the expected pattern." が発生する。
-      inputEl.value = ''
     }
 
     reader.onerror = () => {
-      setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
+      const code = (reader.error as DOMException | null)?.code
+      if (code === DOMException.NOT_FOUND_ERR) {
+        setAnalyzeError('画像ファイルが見つかりませんでした。')
+      } else if (code === DOMException.SECURITY_ERR) {
+        setAnalyzeError('セキュリティエラー：このファイルにアクセスできません。')
+      } else {
+        setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
+      }
     }
 
-    setResult(null)
-    setAnalyzeError('')
-    reader.readAsDataURL(file)
+    try {
+      reader.readAsDataURL(file)
+    } catch (err) {
+      console.error('readAsDataURL エラー:', err)
+      setAnalyzeError('この画像形式には対応していません。JPEGまたはPNG形式の画像を選択してください。')
+    }
   }
 
   const reset = () => {
@@ -283,6 +331,10 @@ export default function ScanPage() {
     setCameraError('')
     setAnalyzeError('')
     setSaveError('')
+    // React key をインクリメントして file input DOM を再生成する
+    // （input.value = '' は Safari で "The string did not match the expected pattern." を
+    //   引き起こすため、key リセット方式で回避する）
+    setFileInputKey(k => k + 1)
   }
 
   const handleAnalyze = async () => {
@@ -543,7 +595,14 @@ export default function ScanPage() {
           )}
         </div>
 
-        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+        <input
+          key={fileInputKey}
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
       </div>
     </>
   )
