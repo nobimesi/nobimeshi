@@ -266,18 +266,49 @@ export default function ScanPage() {
     if (!imageBase64) return
     setLoading(true)
     setAnalyzeError('')
+
+    // ── デバッグ情報 ──
+    console.log('[handleAnalyze] START')
+    console.log('[handleAnalyze] mediaType:', mediaType)
+    console.log('[handleAnalyze] imageBase64 length:', imageBase64.length)
+    console.log('[handleAnalyze] imageBase64 prefix:', imageBase64.slice(0, 60))
+
     try {
-      const res = await fetch('/api/ai-food-recognize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64, mediaType }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
-      const foods: Array<{
+      // STEP 1: fetch
+      let res: Response
+      try {
+        res = await fetch('/api/ai-food-recognize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64, mediaType }),
+        })
+        console.log('[handleAnalyze] fetch OK, status:', res.status)
+      } catch (fetchErr) {
+        console.error('[handleAnalyze] fetch エラー:', fetchErr)
+        throw new Error('通信エラーが発生しました。ネットワーク接続を確認してください。')
+      }
+
+      // STEP 2: レスポンス JSON パース
+      let data: { error?: string; foods?: Array<{
         foodName: string; calories: number; protein: number; carbs: number; fat: number
         portion: string; vitamin_c?: number; calcium?: number; iron?: number; vitamin_d?: number
-      }> = data.foods ?? []
+      }> }
+      try {
+        data = await res.json()
+        console.log('[handleAnalyze] res.json OK, foods:', data.foods?.length ?? 'none')
+      } catch (jsonErr) {
+        console.error('[handleAnalyze] res.json エラー:', jsonErr)
+        throw new Error('解析結果の読み込みに失敗しました。もう一度お試しください。')
+      }
+
+      // STEP 3: APIエラー確認
+      if (!res.ok) {
+        console.error('[handleAnalyze] APIエラー status:', res.status, 'error:', data.error)
+        throw new Error(data.error ?? '解析に失敗しました。もう一度お試しください。')
+      }
+
+      // STEP 4: 認識結果セット
+      const foods = data.foods ?? []
       if (foods.length === 0) throw new Error('食品を認識できませんでした。別の角度で撮影してみてください。')
       setResult(foods.map(f => ({
         name: f.foodName,
@@ -291,8 +322,13 @@ export default function ScanPage() {
         iron: f.iron,
         vitamin_d: f.vitamin_d,
       })))
+      console.log('[handleAnalyze] DONE')
     } catch (e) {
-      setAnalyzeError(e instanceof Error ? e.message : 'エラーが発生しました')
+      console.error('[handleAnalyze] catch:', e)
+      const raw = e instanceof Error ? e.message : String(e)
+      // Safari の DOMException メッセージをユーザー向け日本語に変換
+      const isPatternErr = raw.includes('did not match') || raw.includes('expected pattern')
+      setAnalyzeError(isPatternErr ? '解析に失敗しました。もう一度お試しください。' : raw)
     } finally {
       setLoading(false)
     }
