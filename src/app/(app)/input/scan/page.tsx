@@ -226,101 +226,29 @@ export default function ScanPage() {
     setAnalyzeError('')
   }
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0]
     if (!file) return
-
-    // MIME タイプを同期的にキャプチャ（Safari では非同期コールバック内で取得できない場合あり）
-    const rawType = file.type.toLowerCase()
-    // HEIC / HEIF 判定（type が空文字になるケースも拡張子で補完）
-    const fname = file.name.toLowerCase()
-    const isHeic = rawType === 'image/heic' || rawType === 'image/heif'
-      || fname.endsWith('.heic') || fname.endsWith('.heif')
-
-    const SUPPORTED_MIME = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
-    type SupportedMime = typeof SUPPORTED_MIME[number]
-    const resolvedMime: SupportedMime = (SUPPORTED_MIME as readonly string[]).includes(rawType)
-      ? (rawType as SupportedMime)
-      : 'image/jpeg'
 
     setResult(null)
     setAnalyzeError('')
 
-    // HEIC → JPEG 変換（Anthropic API は HEIC 非対応のため canvas で変換）
-    const convertToJpeg = (dataUrl: string): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas')
-            canvas.width = img.naturalWidth
-            canvas.height = img.naturalHeight
-            const ctx = canvas.getContext('2d')
-            if (!ctx) throw new Error('canvas unavailable')
-            ctx.drawImage(img, 0, 0)
-            resolve(canvas.toDataURL('image/jpeg', 0.92))
-          } catch (err) {
-            reject(err)
-          }
-        }
-        img.onerror = () => reject(new Error('image load failed'))
-        img.src = dataUrl
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = () => reject(new Error('ファイルの読み込みに失敗しました'))
+        reader.readAsDataURL(file)
       })
 
-    const reader = new FileReader()
+      const commaIdx = dataUrl.indexOf(',')
+      const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
 
-    reader.onload = async (ev) => {
-      try {
-        const raw = ev.target?.result
-        if (typeof raw !== 'string' || !raw) {
-          setAnalyzeError('画像データの読み込みに失敗しました。')
-          return
-        }
-
-        let dataUrl = raw
-        let mime: string = resolvedMime
-
-        if (isHeic) {
-          // HEIC は canvas 経由で JPEG に変換する
-          try {
-            dataUrl = await convertToJpeg(raw)
-            mime = 'image/jpeg'
-          } catch {
-            setAnalyzeError(
-              'HEIC形式の変換に失敗しました。\n設定アプリ → カメラ → フォーマットを「互換性優先」に変更するか、JPEGで撮影した画像を選択してください。'
-            )
-            return
-          }
-        }
-
-        const commaIdx = dataUrl.indexOf(',')
-        const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
-
-        setPreview(dataUrl)
-        setImageBase64(base64)
-        setMediaType(mime)
-      } catch (err) {
-        console.error('画像読み込みエラー:', err)
-        setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
-      }
-    }
-
-    reader.onerror = () => {
-      const code = (reader.error as DOMException | null)?.code
-      if (code === DOMException.NOT_FOUND_ERR) {
-        setAnalyzeError('画像ファイルが見つかりませんでした。')
-      } else if (code === DOMException.SECURITY_ERR) {
-        setAnalyzeError('セキュリティエラー：このファイルにアクセスできません。')
-      } else {
-        setAnalyzeError('画像の読み込みに失敗しました。別の画像を試してください。')
-      }
-    }
-
-    try {
-      reader.readAsDataURL(file)
-    } catch (err) {
-      console.error('readAsDataURL エラー:', err)
-      setAnalyzeError('この画像形式には対応していません。JPEGまたはPNG形式の画像を選択してください。')
+      setPreview(dataUrl)
+      setImageBase64(base64)
+      setMediaType(file.type.startsWith('image/') ? file.type : 'image/jpeg')
+    } catch {
+      setAnalyzeError('画像の読み込みに失敗しました。別の画像をお試しください。')
     }
   }
 
