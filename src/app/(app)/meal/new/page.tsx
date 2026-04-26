@@ -572,6 +572,7 @@ function SearchTab({
   const [query, setQuery] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [aiSearchResult, setAiSearchResult] = useState<NutrientForm | null>(null)
 
   const results = query.trim().length >= 1
     ? FOOD_DB.filter(f => matchesQuery(f, query))
@@ -583,6 +584,7 @@ function SearchTab({
     if (!query.trim() || aiLoading) return
     setAiLoading(true)
     setAiError('')
+    setAiSearchResult(null)
     try {
       const res = await fetch('/api/food-nutrition', {
         method: 'POST',
@@ -592,8 +594,7 @@ function SearchTab({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
       const r = data.result
-      // 手入力タブのフォームに渡して確認・編集できるようにする
-      onAiResult({
+      setAiSearchResult({
         foodName: r.foodName ?? query.trim(),
         calories: r.calories != null ? String(r.calories) : '',
         protein:  r.protein  != null ? String(r.protein)  : '',
@@ -616,35 +617,111 @@ function SearchTab({
           type="text"
           placeholder="食品名を入力（例: ごはん、卵）"
           value={query}
-          onChange={e => { setQuery(e.target.value); setAiError('') }}
+          onChange={e => { setQuery(e.target.value); setAiError(''); setAiSearchResult(null) }}
           className="w-full pl-9 pr-9 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
         {query && (
-          <button type="button" onClick={() => { setQuery(''); setAiError('') }} className="absolute right-3 top-1/2 -translate-y-1/2">
+          <button type="button" onClick={() => { setQuery(''); setAiError(''); setAiSearchResult(null) }} className="absolute right-3 top-1/2 -translate-y-1/2">
             <X className="w-4 h-4 text-gray-400" />
           </button>
         )}
       </div>
+
+      {/* AI検索結果カード */}
+      {aiSearchResult && (
+        <div className="rounded-2xl border border-orange-500/50 bg-gray-800/80 p-4 flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs text-orange-400 font-semibold mb-0.5">AI推定結果</p>
+              <p className="text-sm font-bold text-white">{aiSearchResult.foodName}</p>
+            </div>
+            <button type="button" onClick={() => setAiSearchResult(null)} className="shrink-0 mt-0.5">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+          {/* カロリー + PFC */}
+          <div className="flex items-center gap-3">
+            <div className="text-center">
+              <p className="text-xl font-bold text-orange-400">{aiSearchResult.calories}</p>
+              <p className="text-xs text-gray-500">kcal</p>
+            </div>
+            <div className="flex-1 grid grid-cols-3 gap-1.5">
+              {([
+                { label: 'タンパク質', value: aiSearchResult.protein, unit: 'g', color: 'text-blue-400' },
+                { label: '炭水化物',   value: aiSearchResult.carbs,   unit: 'g', color: 'text-yellow-400' },
+                { label: '脂質',       value: aiSearchResult.fat,     unit: 'g', color: 'text-pink-400' },
+              ] as const).map(({ label, value, unit, color }) => (
+                <div key={label} className="bg-gray-700/60 rounded-lg p-1.5 text-center">
+                  <p className={`text-sm font-bold ${color}`}>{value}<span className="text-xs font-normal">{unit}</span></p>
+                  <p className="text-xs text-gray-500 leading-tight">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* 主要ビタミン・ミネラル */}
+          {aiSearchResult.micro && (() => {
+            const m = aiSearchResult.micro
+            const badges = [
+              { key: 'calcium',   label: 'Ca',   v: m.calcium },
+              { key: 'iron',      label: 'Fe',   v: m.iron },
+              { key: 'vitamin_c', label: 'VC',   v: m.vitamin_c },
+              { key: 'vitamin_d', label: 'VD',   v: m.vitamin_d },
+              { key: 'zinc',      label: 'Zn',   v: m.zinc },
+              { key: 'folate',    label: '葉酸', v: m.folate },
+            ].filter(b => b.v != null && Number(b.v) > 0)
+            return badges.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {badges.map(b => (
+                  <span key={b.key} className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">
+                    {b.label} {Number(b.v).toFixed(1)}
+                  </span>
+                ))}
+              </div>
+            ) : null
+          })()}
+          {/* アクションボタン */}
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => { onSelect(aiSearchResult); setAiSearchResult(null) }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-sm font-semibold active:scale-95 transition-all"
+            >
+              <Check className="w-4 h-4" />この内容で記録する
+            </button>
+            <button
+              type="button"
+              onClick={() => { onAiResult(aiSearchResult); setAiSearchResult(null) }}
+              className="flex items-center justify-center gap-1 px-3 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-xl text-sm active:scale-95 transition-all"
+            >
+              <PenLine className="w-3.5 h-3.5" />編集
+            </button>
+          </div>
+          <p className="text-xs text-gray-600 text-center -mt-1">※ AIによる推定値です</p>
+        </div>
+      )}
+
       <p className="text-xs text-gray-500">{query ? `「${query}」 ${results.length}件` : '人気の食品'}</p>
       <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
         {noResults ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <p className="text-sm text-gray-500">見つかりませんでした</p>
-            <button
-              type="button"
-              onClick={handleAiSearch}
-              disabled={aiLoading}
-              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-orange-900/30 disabled:opacity-60 active:scale-95 transition-all"
-            >
-              {aiLoading
-                ? <><Loader2 className="w-4 h-4 animate-spin" />AIで調べています...</>
-                : <><Sparkles className="w-4 h-4" />✨ AIで栄養素を調べる</>
-              }
-            </button>
+            {!aiSearchResult && (
+              <button
+                type="button"
+                onClick={handleAiSearch}
+                disabled={aiLoading}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-orange-900/30 disabled:opacity-60 active:scale-95 transition-all"
+              >
+                {aiLoading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />AIで調べています...</>
+                  : <><Sparkles className="w-4 h-4" />✨ AIで栄養素を調べる</>
+                }
+              </button>
+            )}
             {aiError && (
               <p className="text-xs text-red-400 text-center">{aiError}</p>
             )}
-            <p className="text-xs text-gray-600 text-center">※ AIによる推定値です。手入力タブで確認できます</p>
+            {!aiSearchResult && <p className="text-xs text-gray-600 text-center">※ AIによる推定値です。手入力タブで確認できます</p>}
           </div>
         ) : results.map((food, i) => {
           const foodAllergens = checkAllergens(food.name + (food.aliases?.join('') ?? ''), allergens)
