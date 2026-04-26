@@ -259,10 +259,7 @@ export default function ScanPage() {
     setCameraError('')
     setAnalyzeError('')
     setSaveError('')
-    // React key をインクリメントして file input DOM を再生成する
-    // （input.value = '' は Safari で "The string did not match the expected pattern." を
-    //   引き起こすため、key リセット方式で回避する）
-    setFileInputKey(k => k + 1)
+    setFileInputKey(k => k + 1) // file input を再生成（同じファイルの再選択に対応）
   }
 
   const handleAnalyze = async () => {
@@ -380,9 +377,9 @@ export default function ScanPage() {
                 </div>
               </button>
               <button onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-2xl text-sm text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition-colors">
-                <Upload className="w-4 h-4" />
-                ライブラリから選択
+                className="flex flex-col items-center justify-center gap-1 py-3 border border-gray-200 rounded-2xl text-sm text-gray-500 hover:bg-gray-50 active:bg-gray-100 transition-colors">
+                <span className="flex items-center gap-2"><Upload className="w-4 h-4" />ライブラリから選択</span>
+                <span className="text-xs text-gray-400">※ JPEG・PNG形式のみ対応（HEICは非対応）</span>
               </button>
             </>
           )}
@@ -527,7 +524,7 @@ export default function ScanPage() {
           key={fileInputKey}
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,image/*"
+          accept="image/jpeg,image/png,image/gif,image/webp"
           onChange={handleFileSelect}
           className="hidden"
         />
