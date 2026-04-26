@@ -37,6 +37,28 @@ function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// 画像をCanvas経由でリサイズ・圧縮してBase64に変換（Safari対応）
+function compressImage(dataUrl: string, maxWidth = 1024, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width)
+      const w = Math.round(img.width * scale)
+      const h = Math.round(img.height * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('Canvas失敗')); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      const compressed = canvas.toDataURL('image/jpeg', quality)
+      resolve(compressed)
+    }
+    img.onerror = () => reject(new Error('画像読み込み失敗'))
+    img.src = dataUrl
+  })
+}
+
 // カメラオーバーレイ（fullscreen）
 function CameraOverlay({
   onCapture,
@@ -169,7 +191,7 @@ export default function ScanPage() {
   const [showCamera, setShowCamera] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
-  const [mediaType, setMediaType] = useState<string>('image/jpeg')
+  const [mediaType] = useState<string>('image/jpeg')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<RecognizedFood[] | null>(null)
   const [analyzeError, setAnalyzeError] = useState('')
@@ -189,7 +211,6 @@ export default function ScanPage() {
       .then(d => setChildren(d.children ?? []))
       .catch(console.error)
 
-    // 時刻に応じてデフォルト食事タイプを設定
     const h = new Date().getHours()
     if (h < 10) setMealType('breakfast')
     else if (h < 14) setMealType('lunch')
@@ -217,13 +238,19 @@ export default function ScanPage() {
     }
   }
 
-  const handleCapture = (dataUrl: string) => {
+  const handleCapture = async (dataUrl: string) => {
     setShowCamera(false)
-    setPreview(dataUrl)
-    setImageBase64(dataUrl.split(',')[1])
-    setMediaType('image/jpeg')
     setResult(null)
     setAnalyzeError('')
+    try {
+      const compressed = await compressImage(dataUrl)
+      setPreview(compressed)
+      setImageBase64(compressed.split(',')[1])
+    } catch {
+      // 圧縮失敗時はそのまま使用
+      setPreview(dataUrl)
+      setImageBase64(dataUrl.split(',')[1])
+    }
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,12 +268,10 @@ export default function ScanPage() {
         reader.readAsDataURL(file)
       })
 
-      const commaIdx = dataUrl.indexOf(',')
-      const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl
-
-      setPreview(dataUrl)
-      setImageBase64(base64)
-      setMediaType(file.type.startsWith('image/') ? file.type : 'image/jpeg')
+      // Canvas経由で圧縮（Safari対応・サイズ削減）
+      const compressed = await compressImage(dataUrl)
+      setPreview(compressed)
+      setImageBase64(compressed.split(',')[1])
     } catch {
       setAnalyzeError('画像の読み込みに失敗しました。別の画像をお試しください。')
     }
@@ -259,7 +284,7 @@ export default function ScanPage() {
     setCameraError('')
     setAnalyzeError('')
     setSaveError('')
-    setFileInputKey(k => k + 1) // file input を再生成（同じファイルの再選択に対応）
+    setFileInputKey(k => k + 1)
   }
 
   const handleAnalyze = async () => {
@@ -267,47 +292,28 @@ export default function ScanPage() {
     setLoading(true)
     setAnalyzeError('')
 
-    // ── デバッグ情報 ──
-    console.log('[handleAnalyze] START')
-    console.log('[handleAnalyze] mediaType:', mediaType)
-    console.log('[handleAnalyze] imageBase64 length:', imageBase64.length)
-    console.log('[handleAnalyze] imageBase64 prefix:', imageBase64.slice(0, 60))
-
     try {
-      // STEP 1: fetch
-      let res: Response
-      try {
-        res = await fetch('/api/ai-food-recognize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, mediaType }),
-        })
-        console.log('[handleAnalyze] fetch OK, status:', res.status)
-      } catch (fetchErr) {
-        console.error('[handleAnalyze] fetch エラー:', fetchErr)
-        throw new Error('通信エラーが発生しました。ネットワーク接続を確認してください。')
-      }
+      const res = await fetch('/api/ai-food-recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mediaType }),
+      })
 
-      // STEP 2: レスポンス JSON パース
       let data: { error?: string; foods?: Array<{
         foodName: string; calories: number; protein: number; carbs: number; fat: number
         portion: string; vitamin_c?: number; calcium?: number; iron?: number; vitamin_d?: number
       }> }
+
       try {
         data = await res.json()
-        console.log('[handleAnalyze] res.json OK, foods:', data.foods?.length ?? 'none')
-      } catch (jsonErr) {
-        console.error('[handleAnalyze] res.json エラー:', jsonErr)
+      } catch {
         throw new Error('解析結果の読み込みに失敗しました。もう一度お試しください。')
       }
 
-      // STEP 3: APIエラー確認
       if (!res.ok) {
-        console.error('[handleAnalyze] APIエラー status:', res.status, 'error:', data.error)
         throw new Error(data.error ?? '解析に失敗しました。もう一度お試しください。')
       }
 
-      // STEP 4: 認識結果セット
       const foods = data.foods ?? []
       if (foods.length === 0) throw new Error('食品を認識できませんでした。別の角度で撮影してみてください。')
       setResult(foods.map(f => ({
@@ -322,13 +328,9 @@ export default function ScanPage() {
         iron: f.iron,
         vitamin_d: f.vitamin_d,
       })))
-      console.log('[handleAnalyze] DONE')
     } catch (e) {
-      console.error('[handleAnalyze] catch:', e)
       const raw = e instanceof Error ? e.message : String(e)
-      // Safari の DOMException メッセージをユーザー向け日本語に変換
-      const isPatternErr = raw.includes('did not match') || raw.includes('expected pattern')
-      setAnalyzeError(isPatternErr ? '解析に失敗しました。もう一度お試しください。' : raw)
+      setAnalyzeError(raw)
     } finally {
       setLoading(false)
     }
@@ -341,7 +343,6 @@ export default function ScanPage() {
     const child = children[selectedChildIndex]
     const today = toLocalDateStr(new Date())
     try {
-      // ローカル正午をUTCに変換（UTCハードコードではなくローカル日時で記録）
       const recordedAt = new Date(`${today}T12:00:00`).toISOString()
       const responses = await Promise.all(
         result.map(food =>
@@ -384,7 +385,6 @@ export default function ScanPage() {
       )}
 
       <div className="flex flex-col min-h-screen">
-        {/* ヘッダー */}
         <div className="flex items-center gap-3 px-4 pt-12 pb-4">
           <button onClick={() => router.back()} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -394,7 +394,6 @@ export default function ScanPage() {
 
         <div className="px-4 flex flex-col gap-4 pb-8">
 
-          {/* 画像未選択：初期状態 */}
           {!preview && (
             <>
               {cameraError && (
@@ -420,7 +419,6 @@ export default function ScanPage() {
             </>
           )}
 
-          {/* 画像選択済み */}
           {preview && (
             <>
               <div className="relative rounded-2xl overflow-hidden">
@@ -434,7 +432,6 @@ export default function ScanPage() {
                 )}
               </div>
 
-              {/* 解析ボタン */}
               {!result && (
                 <>
                   <button onClick={handleAnalyze} disabled={loading}
@@ -451,10 +448,8 @@ export default function ScanPage() {
                 </>
               )}
 
-              {/* 解析結果 */}
               {result && (
                 <div className="flex flex-col gap-3">
-                  {/* 認識結果サマリーカード */}
                   <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-2">
                       <Check className="w-5 h-5 text-white" />
@@ -499,7 +494,6 @@ export default function ScanPage() {
                     ※ AI解析の結果は目安です。実際の栄養素は食材・調理法により異なります。
                   </div>
 
-                  {/* 子供選択 */}
                   {children.length > 0 && (
                     <div className="bg-white border border-gray-100 rounded-xl p-3">
                       <p className="text-xs font-semibold text-gray-500 mb-2">記録する子供</p>
@@ -518,7 +512,6 @@ export default function ScanPage() {
                     </div>
                   )}
 
-                  {/* 食事タイプ選択 */}
                   <div>
                     <p className="text-xs font-semibold text-gray-500 mb-2">食事の種類</p>
                     <div className="grid grid-cols-4 gap-2">
